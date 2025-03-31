@@ -1,0 +1,62 @@
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* La imagen se posiciona encima del canvas */
+.interface-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  width: 100vw; /* Ajusta según necesites */
+  height: 100vh;
+  pointer-events: none; /* Permite interactuar con el canvas debajo */
+}
+.crosshair-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 12;
+  width: 100vw; /* Ajusta según necesites */
+  height: 100vh;
+  pointer-events: none; /* Permite interactuar con el canvas debajo */
+}
+.bg-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  width: 100vw; /* Ajusta según necesites */
+  height: 100vh;
+  pointer-events: none; /* Permite interactuar con el canvas debajo */
+}
+.buttons-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 12;
+  width: 100vw; /* Ajusta según necesites */
+  height: 100vh;
+  pointer-events: none; /* Permite interactuar con el canvas debajo */
+}
+.map-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  width: 450px; /* Ajusta según necesites */
+  height: 300px;
+  pointer-events: none; /* Permite interactuar con el canvas debajo */
+}
+
+.text-overlay {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  color: white;
+  font-size: 2rem;
+  z-index: 20;
+  pointer-events: none;
+}
