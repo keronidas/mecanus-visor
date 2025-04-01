@@ -1,6 +1,10 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+
+// Naranja: rgba(255,64,0)
 
 const config = {
   camera: {
@@ -33,14 +37,171 @@ let lastButtonPressTime = 0
 let boton0pulsado = false
 let boton1pulsado = false
 let zoomLevel = 1
-const zoomSpeed = 0.5
+const zoomSpeed = 1
 const minZoom = 1
-const maxZoom = 2.5
+const maxZoom = 3
+let ejex = ''
+let ejey = ''
 let anguloDronCamaraX = 0
 let anguloDronCamaraY = 0
 let targetDistance = '---------'
 document.documentElement.style.setProperty('--zoomLevel', zoomLevel)
 
+class Map {
+  constructor(initialZoom = 12) {
+    this.zoomLevel = initialZoom
+    this.zoomMapSpeed = 1
+    this.minZoomMap = 6
+    this.maxZoomMap = 16
+    this.targetCoords = [40.469519, -3.615917]
+
+    this.initContainer()
+    this.initMap()
+    this.setupKeyboardControls()
+  }
+
+  initContainer() {
+    this.element = document.createElement('div')
+    this.element.id = 'map'
+    this.element.style.cssText = `
+      width: 260px; 
+      clip-path: polygon(100% 100%, 100% 0%, 40% 0%, 0% 100%);
+      height: 145px; 
+      background: transparent !important;
+       backdrop-filter: blur(2px);
+      position: absolute; 
+      bottom: 1%;
+      right: 0.6%;
+      margin-bottom: 4px;
+      z-index: 30;
+      overflow: hidden;
+      background: #e8e8e8;
+
+    `
+    document.body.appendChild(this.element)
+  }
+
+  initMap() {
+    this.map = L.map(this.element, {
+      zoomControl: false,
+      attributionControl: false,
+      preferCanvas: true
+    })
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      opacity: 0.8
+    }).addTo(this.map)
+    this.map.setView(this.targetCoords, this.zoomLevel)
+  }
+
+  setupKeyboardControls() {
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT') return
+
+      switch (e.key.toLowerCase()) {
+        case 'i':
+          this.setZoom(this.zoomLevel + this.zoomMapSpeed)
+          break
+        case 'k':
+          this.setZoom(this.zoomLevel - this.zoomMapSpeed)
+          break
+      }
+    })
+  }
+
+  setZoom(newZoom) {
+    if (!this.map) return
+
+    newZoom = Math.max(this.minZoomMap, Math.min(this.maxZoomMap, newZoom))
+
+    if (newZoom !== this.zoomLevel) {
+      this.zoomLevel = newZoom
+      this.map.setZoom(this.zoomLevel)
+    }
+  }
+}
+class Viewfinder {
+  constructor() {
+    // Crear elementos
+    this.container = document.createElement('div')
+    this.circle = document.createElement('div')
+    this.lineLeft = document.createElement('div')
+    this.lineRight = document.createElement('div')
+
+    this.initStyles()
+    document.body.appendChild(this.container)
+  }
+
+  initStyles() {
+    // Estilo del contenedor
+    this.container.style.cssText = `
+      position: fixed;
+      top: 92.5%;
+      left: 92.4%;
+      transform: translate(-50%, -50%);
+      z-index: 30;
+      pointer-events: none;
+    `
+
+    // Estilo del círculo central
+    this.circle.style.cssText = `
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background-color: black;
+      border: 2px solid rgba(255,64,0);
+      box-sizing: border-box;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    `
+
+    // Estilo de las líneas (compartido)
+    const lineStyle = `
+      position: absolute;
+      bottom: 50%;
+      height: 5px;
+      background-color: rgba(255,64,0);
+      width: 50px;
+      transform-origin: left center;
+    `
+
+    // Línea izquierda
+    this.lineLeft.style.cssText =
+      lineStyle +
+      `
+      left: 50%;
+      transform: translate(0, -50%) rotate(180deg);
+    `
+
+    // Línea derecha
+    this.lineRight.style.cssText =
+      lineStyle +
+      `
+      left: 50%;
+      transform: translate(0, -50%);
+    `
+
+    // Añadir elementos al contenedor
+    this.container.appendChild(this.lineLeft)
+    this.container.appendChild(this.lineRight)
+    this.container.appendChild(this.circle)
+  }
+
+  // Método para actualizar el ángulo de las líneas
+  updateAngle(angleDegrees, eje) {
+    const angle = angleDegrees / 2 // Dividimos el ángulo para ambas direcciones
+    this.lineLeft.style.transform = `translate(0, -50%) rotate(${180 - angle - eje + 180}deg)`
+    this.lineRight.style.transform = `translate(0, -50%) rotate(${angle - eje + 180}deg)`
+  }
+
+  // Método para actualizar la longitud de las líneas
+  updateLength(lengthPx) {
+    this.lineLeft.style.width = `${lengthPx}px`
+    this.lineRight.style.width = `${lengthPx}px`
+  }
+}
 class DataInfo {
   constructor(text = 'Grados') {
     this.element = document.createElement('div')
@@ -81,7 +242,6 @@ class DataInfo {
       flex-direction: column;
       text-align: center;
       z-index: 20;
- 
     `
 
     // Estilo para el display vertical (añadido)
@@ -100,14 +260,10 @@ class DataInfo {
       flex-direction: column;
       text-align: center;
       z-index: 20;
-
     `
   }
 
   setText(ejeX, ejeY) {
-    if (ejeY > 90) {
-      ejeY -= 360
-    }
     ejeY = parseFloat(ejeY)
     ejeY = ejeY.toFixed(1)
     this.horizontalAxes.innerText = ejeX
@@ -115,7 +271,8 @@ class DataInfo {
   }
 
   update(ejeX, ejeY) {
-    this.setText(ejeX, ejeY)
+    let ejeC = (360 - ejeX).toFixed(1)
+    this.setText(ejeC, ejeY)
   }
 
   create() {
@@ -298,7 +455,6 @@ class Cross {
     this.element.appendChild(this.verticalLineTop)
   }
 }
-
 class TrackingFrame {
   constructor() {
     this.element = document.createElement('div')
@@ -414,8 +570,6 @@ class Drone {
     this.updatePosition()
   }
 }
-let ejex = ''
-let ejey = ''
 class JoystickControls {
   constructor(camera) {
     this.camera = camera
@@ -560,8 +714,9 @@ function init() {
   const distanceInfo = new distanceInformation()
   const zoomIndicator = new ZoomIndicator()
   const cross = new Cross()
+  const map = new Map()
+  const viewfinder = new Viewfinder()
 
-  // Cargar texturas y modelos
   new RGBELoader().load('assets/environmentMap/road4k.hdr', (texture) => {
     texture.mapping = THREE.EquirectangularReflectionMapping
     scene.background = texture
@@ -612,19 +767,31 @@ function init() {
     camera.updateProjectionMatrix()
     renderer.setSize(window.innerWidth, window.innerHeight)
   })
+  function toNormalizedDegreesY(radians) {
+    let degrees = radians * Math.abs(180 / Math.PI)
+    while (degrees > 360) {
+      degrees -= 360
+    }
+    return degrees.toFixed(1)
+  }
   function toNormalizedDegrees(radians) {
-    let degrees = radians * (180 / Math.PI)
-    let normalizedDegrees = (degrees + 360) % 360
-    return normalizedDegrees.toFixed(1)
+    let degrees = radians * Math.abs(180 / Math.PI)
+    while (degrees > 360) {
+      degrees -= 360
+    }
+    while (degrees < 0) {
+      degrees += 360
+    }
+    return degrees.toFixed(1)
   }
   // Función de animación
   function animate() {
     requestAnimationFrame(animate)
     const delta = Math.min(clock.getDelta(), 0.1)
-    info.update(toNormalizedDegrees(ejex), toNormalizedDegrees(ejey))
+    info.update(toNormalizedDegrees(ejex), toNormalizedDegreesY(ejey))
     controls.update(delta)
     zoomIndicator.update(zoomLevel)
-
+    viewfinder.updateAngle(20 * zoomLevel + 100, toNormalizedDegrees(ejex))
     if (droneInstance) {
       droneInstance.update()
 
