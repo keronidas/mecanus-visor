@@ -10,7 +10,7 @@ const config = {
   camera: {
     fov: 75,
     near: 0.1,
-    far: 1000,
+    far: 3000,
     position: { x: 0, y: 0, z: 0 }
   },
   controls: {
@@ -36,10 +36,11 @@ const clock = new THREE.Clock()
 let lastButtonPressTime = 0
 let boton0pulsado = false
 let boton1pulsado = false
+let trackingMode = false
 let zoomLevel = 1
-const zoomSpeed = 1
+const zoomSpeed = 2
 const minZoom = 1
-const maxZoom = 3
+const maxZoom = 8
 let ejex = ''
 let ejey = ''
 let anguloDronCamaraX = 0
@@ -120,6 +121,24 @@ class Map {
     }
   }
 }
+class InfoAngle {
+  constructor() {
+    this.infoAngle = document.createElement('div')
+    this.initStyles()
+    document.body.appendChild(this.infoAngle)
+  }
+  initStyles() {
+    this.infoAngle.style.cssText = `
+  position: absolute;
+  top: 0%;
+  margin-bottom: 200px;
+  left: 50%;
+  font-size: 40px;
+  z-index: 30;
+`
+  }
+}
+
 class Viewfinder {
   constructor() {
     // Crear elementos
@@ -161,7 +180,7 @@ class Viewfinder {
     const lineStyle = `
       position: absolute;
       bottom: 50%;
-      height: 5px;
+      height: 4px;
       background-color: rgba(255,64,0);
       width: 50px;
       transform-origin: left center;
@@ -485,14 +504,18 @@ class TrackingFrame {
     const y = (-(projected.y * 0.5) + 0.5) * window.innerHeight
 
     if (
-      x > window.innerWidth / 2 - 100 &&
-      x < window.innerWidth / 2 + 100 &&
-      y > window.innerHeight / 2 - 75 &&
-      y < window.innerHeight / 2 + 75
+      x > window.innerWidth / 2 - 300 &&
+      x < window.innerWidth / 2 + 400 &&
+      y > window.innerHeight / 2 - 275 &&
+      y < window.innerHeight / 2 + 275
     ) {
       this.element.style.border = `5px solid rgba(0, 143, 57)`
       this.element.style.boxShadow = `0 0 10px  rgba(0, 143, 57, 0.8)`
+      if (trackingMode) {
+        followDrone = true
+      }
     } else {
+      followDrone = false
       this.element.style.border = `5px solid rgba(255, 0, 0)`
       this.element.style.boxShadow = `0 0 10px  rgba(255, 0, 0, 0.8)`
     }
@@ -525,6 +548,7 @@ class TrackingFrame {
 
   toggle() {
     showTrackingFrame = !showTrackingFrame
+    trackingMode = false
     this.element.style.visibility = showTrackingFrame ? 'visible' : 'hidden'
     this.element.style.opacity = showTrackingFrame ? '1' : '0'
     this.isCentered = false
@@ -540,6 +564,7 @@ class TrackingFrame {
 
   hide() {
     showTrackingFrame = false
+    trackingFrame = false
     this.element.style.visibility = 'hidden'
   }
 }
@@ -555,8 +580,8 @@ class Drone {
   updatePosition() {
     this.angle += config.drone.orbitSpeed
     this.position.x = config.drone.orbitRadius * Math.cos(this.angle * 1.3) * 2
-    this.position.z = config.drone.orbitRadius * Math.sin(this.angle * 0.7) + 500
-    this.position.y = config.drone.height + Math.sin(this.angle * 2) * config.drone.bobAmount + 400
+    this.position.z = config.drone.orbitRadius * Math.sin(this.angle * 0.7) + 1000
+    this.position.y = config.drone.height + Math.sin(this.angle * 2) * config.drone.bobAmount + 600
     let angleInRadiansX = -Math.atan2(this.position.z, this.position.x) + Math.PI + Math.PI / 2
     let angleInRadiansY = Math.atan2(this.position.y, this.position.z)
     targetDistance = ` ${Math.sqrt(this.position.x * this.position.x + this.position.y * this.position.y + this.position.z * this.position.z).toFixed(1)}m`
@@ -581,6 +606,23 @@ class JoystickControls {
     this.setupEventListeners()
   }
 
+  increaseAngles(gradosBusqueda) {
+    if (trackingMode) {
+      this.yaw -= 0.002
+      const gradoActual = (this.pitch.toFixed(3) * 180) / Math.PI
+
+      if (gradoActual < gradosBusqueda) {
+        this.pitch += 0.001
+      }
+      if (gradoActual > gradosBusqueda) {
+        this.pitch -= 0.001
+      }
+
+      if (droneInstance) {
+      }
+    }
+  }
+
   setupEventListeners() {
     window.addEventListener('gamepadconnected', (e) => {
       this.gamepad = e.gamepad
@@ -598,17 +640,34 @@ class JoystickControls {
     const gamepad = navigator.getGamepads()[this.gamepad.index]
     if (!gamepad) return
 
-    // Control de zoom cuando followDrone está activo
-    if (followDrone) {
-      if (gamepad.buttons[2]?.pressed && gamepad.buttons[2]?.value > 0) {
-        zoomLevel = THREE.MathUtils.clamp(zoomLevel + zoomSpeed * delta, minZoom, maxZoom)
-        updateCameraZoom()
-      }
+    if (gamepad.buttons[3]?.touched && gamepad.buttons[3]?.value > 0) {
+      trackingMode = true
 
-      if (gamepad.buttons[4]?.pressed && gamepad.buttons[4]?.value > 0) {
-        zoomLevel = THREE.MathUtils.clamp(zoomLevel - zoomSpeed * delta, minZoom, maxZoom)
+      if (trackingMode) {
+        zoomLevel = 3
+        updateCameraZoom()
+      } else {
+        followDrone = false
+        zoomLevel = 1
         updateCameraZoom()
       }
+    }
+
+    // Control de zoom cuando followDrone está activo
+    if (gamepad.buttons[2]?.pressed && gamepad.buttons[2]?.value > 0) {
+      if (!followDrone) {
+        trackingMode = false
+      }
+      zoomLevel = THREE.MathUtils.clamp(zoomLevel + zoomSpeed * delta, minZoom, maxZoom)
+      updateCameraZoom()
+    }
+
+    if (gamepad.buttons[4]?.pressed && gamepad.buttons[4]?.value > 0) {
+      if (!followDrone) {
+        trackingMode = false
+      }
+      zoomLevel = THREE.MathUtils.clamp(zoomLevel - zoomSpeed * delta, minZoom, maxZoom)
+      updateCameraZoom()
     }
 
     if (!followDrone) {
@@ -630,6 +689,8 @@ class JoystickControls {
 
     if (gamepad.buttons[0]?.pressed) {
       if (boton1pulsado) {
+        trackingMode = false
+
         toggleFollowMode()
         boton0pulsado = !boton0pulsado
         lastButtonPressTime = now
@@ -638,6 +699,9 @@ class JoystickControls {
 
     if (gamepad.buttons[1]?.pressed) {
       if (!boton0pulsado) {
+        if (!followDrone) {
+          trackingMode = false
+        }
         trackingFrame.toggle()
         boton1pulsado = !boton1pulsado
         lastButtonPressTime = now
@@ -664,7 +728,6 @@ function toggleFollowMode() {
     trackingFrame.center()
   } else {
     trackingFrame.isCentered = false
-    zoomLevel = 1
     updateCameraZoom()
   }
 }
@@ -808,6 +871,9 @@ function init() {
 
       if (showTrackingFrame) {
         trackingFrame.update(droneInstance.position, camera)
+      }
+      if (trackingMode) {
+        controls.increaseAngles(30)
       }
     }
 
