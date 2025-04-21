@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Información Gamepad</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    pre {
+      background-color: #f4f4f4;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+  </style>
+</head>
+<body>
+  <h1>Información de Gamepads Conectados</h1>
+  <pre id="gamepad-info"></pre>
+
+  <script>
+    function getGamepadsInfo() {
+      const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+      let gamepadInfo = '';
+      for (let i = 0; i < gamepads.length; i++) {
+        if (gamepads[i]) {
+          gamepadInfo += `Gamepad ${i + 1}:\n`;
+          gamepadInfo += `  ID: ${gamepads[i].id}\n`;
+          gamepadInfo += `  Tipo: ${gamepads[i].id.includes("Sony") ? "PlayStation" : "Otro"}\n`;
+          gamepadInfo += `  Botones presionados:\n`;
+          gamepads[i].buttons.forEach((button, index) => {
+            gamepadInfo += `    Botón ${index + 1}: ${button.pressed ? 'Presionado' : 'No presionado'}\n`;
+          });
+          gamepadInfo += `  Ejes:\n`;
+          gamepads[i].axes.forEach((axis, index) => {
+            gamepadInfo += `    Eje ${index + 1}: ${axis.toFixed(2)}\n`;
+          });
+          gamepadInfo += `\n`;
+        }
+      }
+      document.getElementById('gamepad-info').textContent = gamepadInfo;
+    }
+
+    // Llamada para obtener la información de los gamepads
+    setInterval(getGamepadsInfo, 1000);
+  </script>
+</body>
+</html>

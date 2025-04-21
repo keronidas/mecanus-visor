@@ -1,6 +1,6 @@
 import * as THREE from 'three'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader'
+import { RGBELoader } from 'three/addons/loaders/RGBELoader'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -28,6 +28,8 @@ const config = {
     deadZone: 0.15
   }
 }
+let mixer // Variable para el AnimationMixer
+let actions = {} // Objeto para almacenar las acciones de animación
 let scene, renderer, camera
 let droneInstance, trackingFrame
 let followDrone = false
@@ -40,7 +42,7 @@ let trackingMode = false
 let zoomLevel = 1
 const zoomSpeed = 2
 const minZoom = 1
-const maxZoom = 8
+const maxZoom = 10
 let ejex = ''
 let ejey = ''
 let anguloDronCamaraX = 0
@@ -65,9 +67,9 @@ class Map {
     this.element = document.createElement('div')
     this.element.id = 'map'
     this.element.style.cssText = `
-      width: 260px; 
+      width: 13.5%; 
       clip-path: polygon(100% 100%, 100% 0%, 40% 0%, 0% 100%);
-      height: 145px; 
+      height: 13.5%; 
       background: transparent !important;
        backdrop-filter: blur(2px);
       position: absolute; 
@@ -121,23 +123,23 @@ class Map {
     }
   }
 }
-class InfoAngle {
-  constructor() {
-    this.infoAngle = document.createElement('div')
-    this.initStyles()
-    document.body.appendChild(this.infoAngle)
-  }
-  initStyles() {
-    this.infoAngle.style.cssText = `
-  position: absolute;
-  top: 0%;
-  margin-bottom: 200px;
-  left: 50%;
-  font-size: 40px;
-  z-index: 30;
-`
-  }
-}
+// class InfoAngle {
+//   constructor() {
+//     this.infoAngle = document.createElement("div");
+//     this.initStyles();
+//     document.body.appendChild(this.infoAngle);
+//   }
+//   initStyles() {
+//     this.infoAngle.style.cssText = `
+//   position: absolute;
+//   top: 0%;
+//   margin-bottom: 200px;
+//   left: 50%;
+//   font-size: 40px;
+//   z-index: 30;
+// `;
+//   }
+// }
 
 class Viewfinder {
   constructor() {
@@ -515,7 +517,6 @@ class TrackingFrame {
         followDrone = true
       }
     } else {
-      followDrone = false
       this.element.style.border = `5px solid rgba(255, 0, 0)`
       this.element.style.boxShadow = `0 0 10px  rgba(255, 0, 0, 0.8)`
     }
@@ -584,7 +585,11 @@ class Drone {
     this.position.y = config.drone.height + Math.sin(this.angle * 2) * config.drone.bobAmount + 600
     let angleInRadiansX = -Math.atan2(this.position.z, this.position.x) + Math.PI + Math.PI / 2
     let angleInRadiansY = Math.atan2(this.position.y, this.position.z)
-    targetDistance = ` ${Math.sqrt(this.position.x * this.position.x + this.position.y * this.position.y + this.position.z * this.position.z).toFixed(1)}m`
+    targetDistance = ` ${Math.sqrt(
+      this.position.x * this.position.x +
+        this.position.y * this.position.y +
+        this.position.z * this.position.z
+    ).toFixed(1)}m`
     anguloDronCamaraX = angleInRadiansX
     anguloDronCamaraY = angleInRadiansY
     this.model.position.copy(this.position)
@@ -786,10 +791,25 @@ function init() {
     scene.environment = texture
   })
 
-  new GLTFLoader().load('assets/models/dron.glb', (gltf) => {
+  new GLTFLoader().load('assets/models/mavic.glb', (gltf) => {
     const model = gltf.scene
     model.scale.set(1, 1, 1)
     scene.add(model)
+
+    // 1. Verificar si el modelo tiene animaciones
+    if (gltf.animations && gltf.animations.length) {
+      console.log('Animaciones encontradas:', gltf.animations)
+
+      // 2. Crear un AnimationMixer para el modelo
+      mixer = new THREE.AnimationMixer(model)
+
+      // 3. Crear acciones para cada animación
+      gltf.animations.forEach((clip) => {
+        actions[clip.name] = mixer.clipAction(clip)
+        actions[clip.name].play() // Reproducir automáticamente
+      })
+    }
+
     droneInstance = new Drone(model)
   })
 
@@ -822,6 +842,10 @@ function init() {
         lastButtonPressTime = now
       }
     }
+    if (e.key.toLowerCase() === 'q') {
+      history.back();
+    }
+    
   })
 
   // Manejar redimensionamiento
@@ -854,9 +878,12 @@ function init() {
     info.update(toNormalizedDegrees(ejex), toNormalizedDegreesY(ejey))
     controls.update(delta)
     zoomIndicator.update(zoomLevel)
-    viewfinder.updateAngle(20 * zoomLevel + 100, toNormalizedDegrees(ejex))
+    viewfinder.updateAngle(180 - 60 / zoomLevel, toNormalizedDegrees(ejex))
     if (droneInstance) {
       droneInstance.update()
+      if (mixer) {
+        mixer.update(delta)
+      }
 
       if (followDrone) {
         camera.lookAt(droneInstance.position)
