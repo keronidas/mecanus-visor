@@ -27,7 +27,7 @@ function createWindow() {
     }
   })
 
- // mainWindow.webContents.openDevTools()
+  mainWindow.webContents.openDevTools()
   mainWindow.maximize()
   mainWindow.setBounds({
     x: 0,

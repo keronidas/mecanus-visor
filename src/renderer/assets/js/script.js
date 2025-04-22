@@ -3,9 +3,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader'
 import { RGBELoader } from 'three/addons/loaders/RGBELoader'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { GamepadManager } from './gamepadManager'
+import html2canvas from 'html2canvas'
 
 // Naranja: rgba(255,64,0)
-
 const config = {
   camera: {
     fov: 75,
@@ -45,9 +46,12 @@ const minZoom = 1
 const maxZoom = 10
 let ejex = ''
 let ejey = ''
+let zoomingMax = false
+let zoomingMin = false
 let anguloDronCamaraX = 0
 let anguloDronCamaraY = 0
 let targetDistance = '---------'
+GamepadManager.init()
 document.documentElement.style.setProperty('--zoomLevel', zoomLevel)
 
 class Map {
@@ -123,23 +127,6 @@ class Map {
     }
   }
 }
-// class InfoAngle {
-//   constructor() {
-//     this.infoAngle = document.createElement("div");
-//     this.initStyles();
-//     document.body.appendChild(this.infoAngle);
-//   }
-//   initStyles() {
-//     this.infoAngle.style.cssText = `
-//   position: absolute;
-//   top: 0%;
-//   margin-bottom: 200px;
-//   left: 50%;
-//   font-size: 40px;
-//   z-index: 30;
-// `;
-//   }
-// }
 
 class Viewfinder {
   constructor() {
@@ -605,10 +592,7 @@ class JoystickControls {
     this.camera = camera
     this.yaw = -Math.PI / 2
     this.pitch = 0
-    this.gamepad = null
     ejex = this.yaw
-
-    this.setupEventListeners()
   }
 
   increaseAngles(gradosBusqueda) {
@@ -627,13 +611,6 @@ class JoystickControls {
       }
     }
   }
-
-  setupEventListeners() {
-    window.addEventListener('gamepadconnected', (e) => {
-      this.gamepad = e.gamepad
-      console.log('Joystick conectado:', e.gamepad.id)
-    })
-  }
   updateJoystick() {
     this.yaw = anguloDronCamaraX
     this.pitch = anguloDronCamaraY
@@ -641,11 +618,12 @@ class JoystickControls {
   update(delta) {
     ejey = this.pitch
     ejex = this.yaw
-    if (!this.gamepad) return
-    const gamepad = navigator.getGamepads()[this.gamepad.index]
+    const gamepad = GamepadManager.getActiveGamepad('joystick')
+    const gamepadRight = GamepadManager.getActiveGamepad('right')
+    const gamepadLeft = GamepadManager.getActiveGamepad('left')
     if (!gamepad) return
 
-    if (gamepad.buttons[3]?.touched && gamepad.buttons[3]?.value > 0) {
+    if (gamepadRight.buttons[4]?.touched && gamepadRight.buttons[4]?.value > 0) {
       trackingMode = true
 
       if (trackingMode) {
@@ -656,10 +634,20 @@ class JoystickControls {
         zoomLevel = 1
         updateCameraZoom()
       }
+    } else {
+      trackingMode = false
+      updateCameraZoom()
+    }
+    if (gamepadLeft.buttons[3]?.touched && gamepadLeft.buttons[3]?.value > 0) {
+      zoomingMin = true
+      updateCameraZoom()
+    }
+    if (gamepadLeft.buttons[8]?.touched && gamepadLeft.buttons[8]?.value > 0) {
+      zoomingMax = true
+      updateCameraZoom()
     }
 
-    // Control de zoom cuando followDrone está activo
-    if (gamepad.buttons[2]?.pressed && gamepad.buttons[2]?.value > 0) {
+    if (gamepad.buttons[1]?.pressed && gamepad.buttons[1]?.value > 0) {
       if (!followDrone) {
         trackingMode = false
       }
@@ -667,7 +655,7 @@ class JoystickControls {
       updateCameraZoom()
     }
 
-    if (gamepad.buttons[4]?.pressed && gamepad.buttons[4]?.value > 0) {
+    if (gamepad.buttons[3]?.pressed && gamepad.buttons[3]?.value > 0) {
       if (!followDrone) {
         trackingMode = false
       }
@@ -692,7 +680,7 @@ class JoystickControls {
     const now = performance.now()
     if (now - lastButtonPressTime < 500) return
 
-    if (gamepad.buttons[0]?.pressed) {
+    if (gamepad.buttons[4]?.pressed) {
       if (boton1pulsado) {
         trackingMode = false
 
@@ -702,7 +690,7 @@ class JoystickControls {
       }
     }
 
-    if (gamepad.buttons[1]?.pressed) {
+    if (gamepadRight.buttons[5]?.pressed) {
       if (!boton0pulsado) {
         if (!followDrone) {
           trackingMode = false
@@ -711,6 +699,9 @@ class JoystickControls {
         boton1pulsado = !boton1pulsado
         lastButtonPressTime = now
       }
+    }
+    if (gamepadLeft.buttons[6]?.pressed) {
+      makeScreenshot()
     }
   }
 
@@ -721,6 +712,27 @@ class JoystickControls {
 }
 
 function updateCameraZoom() {
+  if (zoomingMax) {
+    const delta = Math.min(clock.getDelta(), 0.1)
+    zoomLevel = THREE.MathUtils.clamp(zoomLevel + zoomSpeed * delta * 150, minZoom, maxZoom)
+    camera.zoom = zoomLevel
+    camera.updateProjectionMatrix()
+
+    if (zoomLevel >= maxZoom) {
+      zoomingMax = false
+    }
+  }
+
+  if (zoomingMin) {
+    const delta = Math.min(clock.getDelta(), 0.1)
+    zoomLevel = THREE.MathUtils.clamp(zoomLevel - zoomSpeed * delta * 150, minZoom, maxZoom)
+    camera.zoom = zoomLevel
+    camera.updateProjectionMatrix()
+
+    if (zoomLevel <= minZoom) {
+      zoomingMin = false
+    }
+  }
   camera.zoom = zoomLevel
   camera.updateProjectionMatrix()
 }
@@ -843,9 +855,8 @@ function init() {
       }
     }
     if (e.key.toLowerCase() === 'q') {
-      history.back();
+      history.back()
     }
-    
   })
 
   // Manejar redimensionamiento
@@ -909,5 +920,20 @@ function init() {
 
   animate()
 }
+function makeScreenshot() {
+  html2canvas(document.body).then((canvas) => {
+    // Crear un enlace para descargar la imagen generada
+    const link = document.createElement('a')
 
+    // Crear un nombre único para el archivo (por ejemplo, basado en la fecha y hora)
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-') // Reemplaza los caracteres no válidos para nombres de archivo
+    const fileName = `screenshot-${timestamp}.png` // Nombre único
+
+    link.href = canvas.toDataURL('image/png') // Obtiene la imagen en formato PNG
+    link.download = fileName // Asigna el nombre único al archivo
+
+    // Simular un clic en el enlace para iniciar la descarga
+    link.click()
+  })
+}
 document.addEventListener('DOMContentLoaded', init)
