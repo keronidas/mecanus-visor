@@ -66,7 +66,9 @@ class Map {
     this.initMap()
     this.setupKeyboardControls()
   }
-
+  console(){
+    console.log("Mapa Cargado")
+  }
   initContainer() {
     this.element = document.createElement('div')
     this.element.id = 'map'
@@ -606,9 +608,6 @@ class JoystickControls {
       if (gradoActual > gradosBusqueda) {
         this.pitch -= 0.001
       }
-
-      if (droneInstance) {
-      }
     }
   }
   updateJoystick() {
@@ -795,6 +794,7 @@ function init() {
   const zoomIndicator = new ZoomIndicator()
   const cross = new Cross()
   const map = new Map()
+  map.console()
   const viewfinder = new Viewfinder()
 
   new RGBELoader().load('assets/environmentMap/road4k.hdr', (texture) => {
