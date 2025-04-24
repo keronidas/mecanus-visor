@@ -38,7 +38,6 @@ const config = {
     10: { ejeX: 0, ejeY: 0 }
   }
 }
-let returnMoment = false
 let returnMomentHome = false
 let returnMoment8 = false
 let returnMoment9 = false
@@ -69,16 +68,16 @@ GamepadManager.init()
 document.documentElement.style.setProperty('--zoomLevel', zoomLevel)
 
 class Map {
-  constructor(initialZoom = 12) {
+  constructor(initialZoom = 16) {
     this.zoomLevel = initialZoom
     this.zoomMapSpeed = 1
-    this.minZoomMap = 6
+    this.minZoomMap = 7
     this.maxZoomMap = 16
     this.targetCoords = [40.469519, -3.615917]
 
     this.initContainer()
     this.initMap()
-    this.setupKeyboardControls()
+    this.update()
   }
   console() {
     console.log('Mapa Cargado')
@@ -117,19 +116,8 @@ class Map {
     this.map.setView(this.targetCoords, this.zoomLevel)
   }
 
-  setupKeyboardControls() {
-    document.addEventListener('keydown', (e) => {
-      if (e.target.tagName === 'INPUT') return
-
-      switch (e.key.toLowerCase()) {
-        case 'i':
-          this.setZoom(this.zoomLevel + this.zoomMapSpeed)
-          break
-        case 'k':
-          this.setZoom(this.zoomLevel - this.zoomMapSpeed)
-          break
-      }
-    })
+  update() {
+    this.map.setZoom(this.maxZoomMap - zoomLevel / 3)
   }
 
   setZoom(newZoom) {
@@ -210,7 +198,7 @@ class Viewfinder {
     // Añadir elementos al contenedor
     this.container.appendChild(this.lineLeft)
     this.container.appendChild(this.lineRight)
-    this.container.appendChild(this.circle)
+    // this.container.appendChild(this.circle)
   }
 
   // Método para actualizar el ángulo de las líneas
@@ -689,7 +677,6 @@ class JoystickControls {
       this.pitch -= 0.01
     }
     if (gradoxActual === valuex && gradoyActual === valuey) {
-      returnMoment = false
       returnMomentHome = false
       returnMoment8 = false
       returnMoment9 = false
@@ -708,12 +695,10 @@ class JoystickControls {
       trackingMode = true
 
       if (trackingMode) {
-        zoomLevel = 3
-        updateCameraZoom()
+        updateCameraZoom(3)
       } else {
         followDrone = false
-        zoomLevel = 1
-        updateCameraZoom()
+        updateCameraZoom(1)
       }
     } else {
       trackingMode = false
@@ -770,7 +755,7 @@ class JoystickControls {
 
             const holdDuration = performance.now() - this[holdTimeKey]
 
-            if (holdDuration >= 3000 && !this.cancelarVolverAPosicion) {
+            if (holdDuration >= 2000 && !this.cancelarVolverAPosicion) {
               toastr.options = {
                 positionClass: 'toast-top-right',
                 timeOut: 5000,
@@ -874,7 +859,16 @@ class JoystickControls {
   }
 }
 
-function updateCameraZoom() {
+function updateCameraZoom(num) {
+  if (num > 1) {
+    const delta = Math.min(clock.getDelta(), 0.1)
+    zoomLevel = THREE.MathUtils.clamp(zoomLevel + zoomSpeed * delta * 50, minZoom, num)
+  }
+  if (num === 1) {
+    const delta = Math.min(clock.getDelta(), 0.1)
+    zoomLevel = THREE.MathUtils.clamp(zoomLevel - zoomSpeed * delta * 150, minZoom, maxZoom)
+  }
+
   if (zoomingMax) {
     const delta = Math.min(clock.getDelta(), 0.1)
     zoomLevel = THREE.MathUtils.clamp(zoomLevel + zoomSpeed * delta * 150, minZoom, maxZoom)
@@ -1089,6 +1083,7 @@ function init() {
         controls.increaseAngles(30)
       }
     }
+    map.update()
 
     renderer.render(scene, camera)
   }
