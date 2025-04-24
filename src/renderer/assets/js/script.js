@@ -311,6 +311,8 @@ class distanceInformation {
     this.distance = document.createElement('div')
     this.positionEarthX = document.createElement('div')
     this.positionEarthY = document.createElement('div')
+    this.hour = document.createElement('div')
+    this.date = document.createElement('div')
     this.initStyles()
     this.create()
     document.body.appendChild(this.element)
@@ -333,6 +335,23 @@ class distanceInformation {
       font-weight:bold;
       padding: 8px 12px;
       z-index: 20;
+    `
+    this.date.style.cssText = `
+    position: fixed;
+    color: black;
+    font-family: Arial, sans-serif;
+    font-size: 22px;
+    font-weight:bold;
+    right: 1%;
+    top: 1.7%;
+    `
+    this.hour.style.cssText = `
+    position: fixed;
+    color: black;
+    font-family: Arial, sans-serif;
+    font-size: 22px;
+    right: 1%;
+    top: 4%;
     `
     this.positionEarthX.style.cssText = `
       position: fixed;
@@ -361,12 +380,17 @@ class distanceInformation {
     this.element.appendChild(this.distance)
     this.element.appendChild(this.positionEarthX)
     this.element.appendChild(this.positionEarthY)
+    this.element.appendChild(this.hour)
+    this.element.appendChild(this.date)
     this.distance.textContent = `TRG: ${targetDistance}`
     this.positionEarthX.textContent = `3º36'57" W`
     this.positionEarthY.textContent = `40º28'08" N`
+    this.hour.textContent = new Date().toLocaleTimeString('es-ES')
+    this.date.textContent = new Date().toLocaleDateString('es-ES')
   }
   update(msg) {
     this.distance.textContent = `TRG: ${msg}`
+    this.hour.textContent = new Date().toLocaleTimeString('es-ES')
   }
 }
 class ZoomIndicator {
@@ -393,6 +417,7 @@ class ZoomIndicator {
 
   update(zoomLevel) {
     this.element.textContent = ` x${zoomLevel.toFixed(1)}`
+
     // this.element.style.display = followDrone ? 'block' : 'none'
   }
 }
@@ -481,8 +506,8 @@ class Cross {
     this.verticalLineTop.style.top = `${-20 - newPositionH}px`
     this.circle.style.width = `${zoomLevel * 10}px`
     this.circle.style.height = `${zoomLevel * 10}px`
-    this.circle.style.top = `calc(50% - ${this.circle.offsetWidth / 2}px)`;
-    this.circle.style.left = `calc(50% - ${this.circle.offsetWidth / 2}px)`;
+    this.circle.style.top = `calc(50% - ${this.circle.offsetWidth / 2}px)`
+    this.circle.style.left = `calc(50% - ${this.circle.offsetWidth / 2}px)`
   }
 
   createCross() {
