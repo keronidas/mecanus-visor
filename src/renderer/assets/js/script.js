@@ -4,7 +4,10 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { GamepadManager } from './gamepadManager'
-import html2canvas from 'html2canvas'
+import toastr from 'toastr'
+
+// Importar los estilos de Toastr
+import 'toastr/build/toastr.min.css'
 
 // Naranja: rgba(255,64,0)
 const config = {
@@ -27,8 +30,19 @@ const config = {
   },
   gamepad: {
     deadZone: 0.15
+  },
+  position: {
+    home: { ejeX: 0, ejeY: 0 },
+    8: { ejeX: 0, ejeY: 0 },
+    9: { ejeX: 0, ejeY: 0 },
+    10: { ejeX: 0, ejeY: 0 }
   }
 }
+let returnMoment = false
+let returnMomentHome = false
+let returnMoment8 = false
+let returnMoment9 = false
+let returnMoment10 = false
 let mixer // Variable para el AnimationMixer
 let actions = {} // Objeto para almacenar las acciones de animación
 let scene, renderer, camera
@@ -66,8 +80,8 @@ class Map {
     this.initMap()
     this.setupKeyboardControls()
   }
-  console(){
-    console.log("Mapa Cargado")
+  console() {
+    console.log('Mapa Cargado')
   }
   initContainer() {
     this.element = document.createElement('div')
@@ -389,6 +403,7 @@ class Cross {
     this.verticalLineBot = document.createElement('div')
     this.horizontalLineRight = document.createElement('div')
     this.verticalLineTop = document.createElement('div')
+    this.circle = document.createElement('div')
     this.initStyles()
     this.createCross()
     document.body.appendChild(this.element)
@@ -396,12 +411,20 @@ class Cross {
 
   initStyles() {
     this.element.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-      z-index: 2;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 2;
+    `
+    this.circle.style.cssText = `
+    position: absolute;
+    top:calc(50%) ;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%; /* Lo convierte en círculo */
+    border:2px solid black;
     `
 
     // Línea horizontal derecha
@@ -456,6 +479,10 @@ class Cross {
     this.horizontalLineLeft.style.left = `${-20 - newPositionV}px`
     this.verticalLineBot.style.top = `${newPositionH}px`
     this.verticalLineTop.style.top = `${-20 - newPositionH}px`
+    this.circle.style.width = `${zoomLevel * 10}px`
+    this.circle.style.height = `${zoomLevel * 10}px`
+    this.circle.style.top = `calc(50% - ${this.circle.offsetWidth / 2}px)`;
+    this.circle.style.left = `calc(50% - ${this.circle.offsetWidth / 2}px)`;
   }
 
   createCross() {
@@ -463,6 +490,7 @@ class Cross {
     this.element.appendChild(this.verticalLineBot)
     this.element.appendChild(this.horizontalLineLeft)
     this.element.appendChild(this.verticalLineTop)
+    this.element.appendChild(this.circle)
   }
 }
 class TrackingFrame {
@@ -595,6 +623,9 @@ class JoystickControls {
     this.yaw = -Math.PI / 2
     this.pitch = 0
     ejex = this.yaw
+    this.rightButtonPressStart = null
+    this.homeButtonPressed = false
+    this.homeButtonHoldTime = 0
   }
 
   increaseAngles(gradosBusqueda) {
@@ -613,6 +644,32 @@ class JoystickControls {
   updateJoystick() {
     this.yaw = anguloDronCamaraX
     this.pitch = anguloDronCamaraY
+  }
+  goPosition(valuex, valuey) {
+    valuex = (valuex.toFixed(2) * 180) / Math.PI
+    valuey = (valuey.toFixed(2) * 180) / Math.PI
+    const gradoxActual = (this.yaw.toFixed(2) * 180) / Math.PI
+    const gradoyActual = (this.pitch.toFixed(2) * 180) / Math.PI
+
+    if (gradoxActual < valuex) {
+      this.yaw += 0.01
+    }
+    if (gradoxActual > valuex) {
+      this.yaw -= 0.01
+    }
+    if (gradoyActual < valuey) {
+      this.pitch += 0.01
+    }
+    if (gradoyActual > valuey) {
+      this.pitch -= 0.01
+    }
+    if (gradoxActual === valuex && gradoyActual === valuey) {
+      returnMoment = false
+      returnMomentHome = false
+      returnMoment8 = false
+      returnMoment9 = false
+      returnMoment10 = false
+    }
   }
   update(delta) {
     ejey = this.pitch
@@ -661,14 +718,99 @@ class JoystickControls {
       zoomLevel = THREE.MathUtils.clamp(zoomLevel - zoomSpeed * delta, minZoom, maxZoom)
       updateCameraZoom()
     }
+    if (gamepadRight.buttons[7]?.pressed) {
+      returnMomentHome = true
+    }
+
+    if (gamepadRight && gamepadRight.buttons) {
+      const BUTTON_IDS = [8, 9, 10] // Lista de los botones que están siendo manejados
+
+      BUTTON_IDS.forEach((buttonIndex) => {
+        const button = gamepadRight.buttons[buttonIndex]
+
+        if (button) {
+          const isButtonPressed = button.pressed
+          const holdTimeKey = `buttonHoldTime${buttonIndex}`
+          const originalYawKey = `originalYaw${buttonIndex}`
+          const originalPitchKey = `originalPitch${buttonIndex}`
+
+          if (isButtonPressed) {
+            // Si el botón está presionado
+            if (!this[holdTimeKey]) {
+              // Guardar el tiempo de inicio y la posición solo la primera vez
+              this[holdTimeKey] = performance.now()
+              this[originalYawKey] = this.yaw
+              this[originalPitchKey] = this.pitch
+            }
+
+            const holdDuration = performance.now() - this[holdTimeKey]
+
+            if (holdDuration >= 3000 && !this.cancelarVolverAPosicion) {
+              toastr.options = {
+                positionClass: 'toast-top-right',
+                timeOut: 5000,
+                extendedTimeOut: 1000
+              }
+
+              toastr.success(`¡Guardando posición actual en posicion ${buttonIndex - 7}!`, 'Éxito')
+
+              // Ajustar la posición de las notificaciones de Toastr
+              setTimeout(() => {
+                const toast = document.querySelector('.toast')
+                if (toast) {
+                  toast.style.top = '80px'
+                  toast.style.backgroundColor = 'rgba(255,64,0)' // Cambiar el color de fondo
+                  toast.style.fontSize = '20px' // Cambiar el color de fondo
+                  toast.style.color = '#fff' // Cambiar el color del texto // Ajustar la distancia desde el fondo
+                  toast.style.width = '380px'
+                }
+              }, 100) // Asegúrate de que Toastr ya haya renderizado el toast antes de cambiar el estilo
+
+              if (config?.position?.[buttonIndex]) {
+                config.position[buttonIndex].ejeX = this.yaw
+                config.position[buttonIndex].ejeY = this.pitch
+              }
+              this.cancelarVolverAPosicion = true
+            }
+          } else if (this[holdTimeKey]) {
+            // Si el botón se ha soltado después de haber sido presionado
+            const holdDuration = performance.now() - this[holdTimeKey]
+
+            if (holdDuration < 3000 && !this.cancelarVolverAPosicion) {
+              this.yaw = this[originalYawKey]
+              this.pitch = this[originalPitchKey]
+              ejex = this.yaw
+              ejey = this.pitch
+
+              // Definir retorno de posición para cada botón
+              if (buttonIndex == 8) {
+                returnMoment8 = true
+              }
+              if (buttonIndex == 9) {
+                returnMoment9 = true
+              }
+              if (buttonIndex == 10) {
+                returnMoment10 = true
+              }
+            }
+
+            // Reiniciar estado cuando se suelta el botón
+            this[holdTimeKey] = null
+            this.cancelarVolverAPosicion = false
+          }
+        }
+      })
+    } else {
+      console.log('No se detectó el gamepad o los botones no están disponibles.')
+    }
 
     if (!followDrone) {
       const lookX = this.applyDeadZone(gamepad.axes[0], config.gamepad.deadZone)
       const lookY = this.applyDeadZone(gamepad.axes[1], config.gamepad.deadZone)
 
-      this.yaw -= lookX * config.controls.rotationSpeed * delta
+      this.yaw -= (lookX * config.controls.rotationSpeed * delta) / zoomLevel
       this.pitch = THREE.MathUtils.clamp(
-        this.pitch - lookY * config.controls.rotationSpeed * delta,
+        this.pitch - (lookY * config.controls.rotationSpeed * delta) / zoomLevel,
         config.controls.verticalMin,
         config.controls.verticalMax
       )
@@ -698,9 +840,6 @@ class JoystickControls {
         boton1pulsado = !boton1pulsado
         lastButtonPressTime = now
       }
-    }
-    if (gamepadLeft.buttons[6]?.pressed) {
-      makeScreenshot()
     }
   }
 
@@ -906,7 +1045,18 @@ function init() {
         distanceInfo.update('---------')
         cross.update()
       }
-
+      if (returnMoment8) {
+        controls.goPosition(config.position[8].ejeX, config.position[8].ejeY)
+      }
+      if (returnMoment9) {
+        controls.goPosition(config.position[9].ejeX, config.position[9].ejeY)
+      }
+      if (returnMoment10) {
+        controls.goPosition(config.position[10].ejeX, config.position[10].ejeY)
+      }
+      if (returnMomentHome) {
+        controls.goPosition(config.position.home.ejeX, config.position.home.ejeY)
+      }
       if (showTrackingFrame) {
         trackingFrame.update(droneInstance.position, camera)
       }
@@ -919,21 +1069,5 @@ function init() {
   }
 
   animate()
-}
-function makeScreenshot() {
-  html2canvas(document.body).then((canvas) => {
-    // Crear un enlace para descargar la imagen generada
-    const link = document.createElement('a')
-
-    // Crear un nombre único para el archivo (por ejemplo, basado en la fecha y hora)
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-') // Reemplaza los caracteres no válidos para nombres de archivo
-    const fileName = `screenshot-${timestamp}.png` // Nombre único
-
-    link.href = canvas.toDataURL('image/png') // Obtiene la imagen en formato PNG
-    link.download = fileName // Asigna el nombre único al archivo
-
-    // Simular un clic en el enlace para iniciar la descarga
-    link.click()
-  })
 }
 document.addEventListener('DOMContentLoaded', init)

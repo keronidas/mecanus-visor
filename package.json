@@ -25,7 +25,8 @@
     "html2canvas": "^1.4.1",
     "leaflet": "^1.9.4",
     "tailwind": "^4.0.0",
-    "three": "^0.174.0"
+    "three": "^0.174.0",
+    "toastr": "^2.1.4"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config": "^2.0.0",
