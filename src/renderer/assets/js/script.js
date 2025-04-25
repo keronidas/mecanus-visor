@@ -38,6 +38,12 @@ const config = {
     10: { ejeX: 0, ejeY: 0 }
   }
 }
+let marcoIA = ''
+let min = 0
+let max = 0.7
+let now = min
+let phase = false
+let top = false
 let returnMomentHome = false
 let returnMoment8 = false
 let returnMoment9 = false
@@ -48,11 +54,11 @@ let scene, renderer, camera
 let droneInstance, trackingFrame
 let followDrone = false
 let showTrackingFrame = false
-const clock = new THREE.Clock()
-let lastButtonPressTime = 0
 let boton0pulsado = false
 let boton1pulsado = false
 let trackingMode = false
+const clock = new THREE.Clock()
+let lastButtonPressTime = 0
 let zoomLevel = 1
 const zoomSpeed = 2
 const minZoom = 1
@@ -64,6 +70,7 @@ let zoomingMin = false
 let anguloDronCamaraX = 0
 let anguloDronCamaraY = 0
 let targetDistance = '---------'
+let secondTracking = false
 GamepadManager.init()
 document.documentElement.style.setProperty('--zoomLevel', zoomLevel)
 
@@ -536,18 +543,20 @@ class TrackingFrame {
     const y = (-(projected.y * 0.5) + 0.5) * window.innerHeight
 
     if (
-      x > window.innerWidth / 2 - 300 &&
-      x < window.innerWidth / 2 + 400 &&
-      y > window.innerHeight / 2 - 275 &&
-      y < window.innerHeight / 2 + 275
+      x > window.innerWidth / 2 - 150 &&
+      x < window.innerWidth / 2 + 200 &&
+      y > window.innerHeight / 2 - 137.5 &&
+      y < window.innerHeight / 2 + 137.5
     ) {
       this.element.style.border = `5px solid rgba(0, 143, 57)`
+      marcoIA = 'verde'
       this.element.style.boxShadow = `0 0 10px  rgba(0, 143, 57, 0.8)`
       if (trackingMode) {
         followDrone = true
       }
     } else {
       this.element.style.border = `5px solid rgba(255, 0, 0)`
+      marcoIA = 'rojo'
       this.element.style.boxShadow = `0 0 10px  rgba(255, 0, 0, 0.8)`
     }
 
@@ -684,16 +693,18 @@ class JoystickControls {
     }
   }
   update(delta) {
+    const gamepadRight = GamepadManager.getActiveGamepad('right')
+    const gamepad = GamepadManager.getActiveGamepad('joystick')
+    const gamepadLeft = GamepadManager.getActiveGamepad('left')
     ejey = this.pitch
     ejex = this.yaw
-    const gamepad = GamepadManager.getActiveGamepad('joystick')
-    const gamepadRight = GamepadManager.getActiveGamepad('right')
-    const gamepadLeft = GamepadManager.getActiveGamepad('left')
     if (!gamepad) return
 
+    if (!gamepadRight.buttons[3]?.touched || gamepadRight.buttons[3]?.value < 1) {
+      secondTracking = false
+    }
     if (gamepadRight.buttons[4]?.touched && gamepadRight.buttons[4]?.value > 0) {
       trackingMode = true
-
       if (trackingMode) {
         updateCameraZoom(3)
       } else {
@@ -704,6 +715,7 @@ class JoystickControls {
       trackingMode = false
       updateCameraZoom()
     }
+
     if (gamepadLeft.buttons[3]?.touched && gamepadLeft.buttons[3]?.value > 0) {
       zoomingMin = true
       updateCameraZoom()
@@ -727,6 +739,11 @@ class JoystickControls {
       }
       zoomLevel = THREE.MathUtils.clamp(zoomLevel - zoomSpeed * delta, minZoom, maxZoom)
       updateCameraZoom()
+    }
+    if (gamepadRight.buttons[3]?.touched && gamepadRight.buttons[3]?.value > 0) {
+      if (config.position[8].ejeX.toFixed(0) != 0 && config.position[9].ejeX.toFixed(0) != 0) {
+        secondTracking = true
+      }
     }
     if (gamepadRight.buttons[7]?.pressed) {
       returnMomentHome = true
@@ -831,17 +848,44 @@ class JoystickControls {
     const now = performance.now()
     if (now - lastButtonPressTime < 500) return
 
-    if (gamepad.buttons[4]?.pressed) {
-      if (boton1pulsado) {
-        trackingMode = false
+    if (gamepad.buttons[4]?.touched) {
+      if (marcoIA === 'verde') {
+        if (boton1pulsado) {
+          trackingMode = false
+          toggleFollowMode()
+          boton0pulsado = !boton0pulsado
+          lastButtonPressTime = now
+        }
+      }
+      if (marcoIA === 'rojo') {
+        // Configuración
+        toastr.options = {
+          positionClass: 'toast-top-right',
+          timeOut: 2000,
+          extendedTimeOut: 1000,
+          preventDuplicates: true // Evita duplicados (opcional)
+        }
 
-        toggleFollowMode()
-        boton0pulsado = !boton0pulsado
-        lastButtonPressTime = now
+        // Mostrar error
+        toastr.error(`No se puede fijar el dron`, 'UNABLE TO LOCK')
+
+        // Estilos personalizados (opcional)
+        const toast = document.querySelector('.toast')
+
+        // Opcion1
+
+        if (toast) {
+          toast.style.top = '80px'
+          toast.style.backgroundColor = 'red'
+          toast.style.fontSize = '20px'
+          toast.style.color = '#fff'
+          toast.style.width = '380px'
+        }
       }
     }
 
     if (gamepadRight.buttons[5]?.pressed) {
+      // showTrackingFrame=!showTrackingFrame
       if (!boton0pulsado) {
         if (!followDrone) {
           trackingMode = false
@@ -851,6 +895,7 @@ class JoystickControls {
         lastButtonPressTime = now
       }
     }
+
   }
 
   applyDeadZone(value, deadZone) {
@@ -899,8 +944,44 @@ function toggleFollowMode() {
   console.log('Modo seguimiento:', followDrone ? 'ON' : 'OFF')
 
   if (followDrone) {
+    toastr.options = {
+      positionClass: 'toast-top-right',
+      timeOut: 2000,
+      extendedTimeOut: 1000,
+      preventDuplicates: true // Evita duplicados (opcional)
+    }
+    toastr.error(`Dron fijado`, 'LOCKED')
+    const toast = document.querySelector('.toast')
+
+    // Opcion1
+
+    if (toast) {
+      toast.style.top = '80px'
+      toast.style.backgroundColor = 'green'
+      toast.style.fontSize = '20px'
+      toast.style.color = '#fff'
+      toast.style.width = '380px'
+    }
     trackingFrame.center()
   } else {
+    toastr.options = {
+      positionClass: 'toast-top-right',
+      timeOut: 2000,
+      extendedTimeOut: 1000,
+      preventDuplicates: true
+    }
+    toastr.error(`Dron desfijado`, 'UNLOCKED')
+    const toast = document.querySelector('.toast')
+
+    // Opcion1
+
+    if (toast) {
+      toast.style.top = '80px'
+      toast.style.backgroundColor = '#E5BE01'
+      toast.style.fontSize = '20px'
+      toast.style.color = '#fff'
+      toast.style.width = '380px'
+    }
     trackingFrame.isCentered = false
     updateCameraZoom()
   }
@@ -1082,7 +1163,51 @@ function init() {
       if (trackingMode) {
         controls.increaseAngles(30)
       }
+      if (secondTracking && now <= max) {
+        const yawDeg = ((controls.yaw * 180) / Math.PI).toFixed(2)
+        const pitchDeg = ((controls.pitch * 180) / Math.PI).toFixed(2)
+        const pos8Deg = ((config.position[8].ejeX * 180) / Math.PI).toFixed(2)
+        const pos9Deg = ((config.position[9].ejeX * 180) / Math.PI).toFixed(2)
+        const nowDeg = ((now * 180) / Math.PI).toFixed(2)
+
+        if (!phase) {
+          // Fase 1: Movimiento hacia posición 8
+          if (Math.abs(yawDeg - pos8Deg) > 1.0) {
+            controls.goPosition(config.position[8].ejeX, now)
+          } else if (Math.abs(pitchDeg - nowDeg) <= 1.0) {
+            // Cambia a fase 2 cuando llega a posición 8
+            phase = true
+
+            // Lógica de subida/bajada
+            if (!top) {
+              now = Math.min(now + 0.1, max)
+              if (now >= max) top = true
+            } else {
+              now = Math.max(now - 0.1, 0)
+              if (now <= 0) top = false
+            }
+          }
+        } else {
+          // Fase 2: Movimiento hacia posición 9
+          if (Math.abs(yawDeg - pos9Deg) > 1.0) {
+            controls.goPosition(config.position[9].ejeX, now)
+          } else if (Math.abs(pitchDeg - nowDeg) <= 1.0) {
+            // Cambia a fase 1 cuando llega a posición 9
+            phase = false
+
+            // Lógica de subida/bajada (alterna durante el descenso)
+            if (top) {
+              now = Math.max(now - 0.1, 0)
+              if (now <= 0) top = false
+            } else {
+              now = Math.min(now + 0.1, max)
+              if (now >= max) top = true
+            }
+          }
+        }
+      }
     }
+
     map.update()
 
     renderer.render(scene, camera)
