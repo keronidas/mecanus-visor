@@ -10,11 +10,12 @@ import toastr from 'toastr'
 import 'toastr/build/toastr.min.css'
 
 // Naranja: rgba(255,64,0)
+
 const config = {
   camera: {
     fov: 75,
     near: 0.1,
-    far: 3000,
+    far: 5000,
     position: { x: 0, y: 0, z: 0 }
   },
   controls: {
@@ -620,8 +621,8 @@ class Drone {
   updatePosition() {
     this.angle += config.drone.orbitSpeed
     this.position.x = config.drone.orbitRadius * Math.cos(this.angle * 1.3) * 2
-    this.position.z = config.drone.orbitRadius * Math.sin(this.angle * 0.7) + 1000
-    this.position.y = config.drone.height + Math.sin(this.angle * 2) * config.drone.bobAmount + 600
+    this.position.z = config.drone.orbitRadius * Math.sin(this.angle * 0.7) + 3000
+    this.position.y = config.drone.height + Math.sin(this.angle * 2) * config.drone.bobAmount + 1600
     let angleInRadiansX = -Math.atan2(this.position.z, this.position.x) + Math.PI + Math.PI / 2
     let angleInRadiansY = Math.atan2(this.position.y, this.position.z)
     targetDistance = ` ${Math.sqrt(
@@ -835,12 +836,21 @@ class JoystickControls {
       const lookX = this.applyDeadZone(gamepad.axes[0], config.gamepad.deadZone)
       const lookY = this.applyDeadZone(gamepad.axes[1], config.gamepad.deadZone)
 
-      this.yaw -= (lookX * config.controls.rotationSpeed * delta) / zoomLevel
-      this.pitch = THREE.MathUtils.clamp(
-        this.pitch - (lookY * config.controls.rotationSpeed * delta) / zoomLevel,
-        config.controls.verticalMin,
-        config.controls.verticalMax
-      )
+      if (gamepad.buttons[0].touched) {
+        this.yaw -= (lookX * config.controls.rotationSpeed * delta) / (zoomLevel * 5)
+        this.pitch = THREE.MathUtils.clamp(
+          this.pitch - (lookY * config.controls.rotationSpeed * delta) / (zoomLevel * 5),
+          config.controls.verticalMin,
+          config.controls.verticalMax
+        )
+      } else {
+        this.yaw -= (lookX * config.controls.rotationSpeed * delta) / zoomLevel
+        this.pitch = THREE.MathUtils.clamp(
+          this.pitch - (lookY * config.controls.rotationSpeed * delta) / zoomLevel,
+          config.controls.verticalMin,
+          config.controls.verticalMax
+        )
+      }
 
       this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'))
     }
@@ -895,7 +905,6 @@ class JoystickControls {
         lastButtonPressTime = now
       }
     }
-
   }
 
   applyDeadZone(value, deadZone) {

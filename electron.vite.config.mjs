@@ -18,7 +18,8 @@ export default defineConfig({
         }
       }
     },
-    plugins: [  // Moved inside renderer config
+    plugins: [
+      // Moved inside renderer config
       viteStaticCopy({
         // silent: true,
         targets: [
@@ -33,7 +34,7 @@ export default defineConfig({
         ]
       })
     ]
-  },
+  }
 })
 
 // C:\Users\Usuario\Desktop\sensor\dist\win-unpacked\resources\app.asar.unpacked\resources

@@ -3,11 +3,17 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 const { exec } = require('child_process')
-const path = require('path');
-const os = require('os');
+const path = require('path')
+const os = require('os')
 
 // Configuración de rutas
-const pythonDir = path.join(os.homedir(), 'Documents', 'entornos', 'mi_entorno', 'aplicacionfeindef');
+const pythonDir = path.join(
+  os.homedir(),
+  'Documents',
+  'entornos',
+  'mi_entorno',
+  'aplicacionfeindef'
+)
 const pythonScript = 'integrado_V8.py'
 
 function createWindow() {
@@ -27,7 +33,7 @@ function createWindow() {
     }
   })
 
-  mainWindow.webContents.openDevTools()
+  // mainWindow.webContents.openDevTools()
   mainWindow.maximize()
   mainWindow.setBounds({
     x: 0,
@@ -40,70 +46,73 @@ function createWindow() {
   ipcMain.handle('run-python-app', async () => {
     return new Promise((resolve, reject) => {
       // 1. Verificar existencia del directorio Python
-      const fs = require('fs');
+      const fs = require('fs')
       if (!fs.existsSync(pythonDir)) {
-        const errorMsg = `Directorio Python no encontrado: ${pythonDir}`;
-        console.error('[Python]', errorMsg);
-        dialog.showErrorBox('Error Python', errorMsg);
-         return reject(errorMsg);
+        const errorMsg = `Directorio Python no encontrado: ${pythonDir}`
+        console.error('[Python]', errorMsg)
+        dialog.showErrorBox('Error Python', errorMsg)
+        return reject(errorMsg)
       }
-  
+
       // 2. Construcción del comando mejorada
-      let command, shellOption;
+      let command, shellOption
       try {
         if (process.platform === 'win32') {
-          command = `cd /d "${pythonDir}" venv/Script/activate && python ${pythonScript}`;
-          shellOption = 'cmd.exe';
+          command = `cd /d "${pythonDir}" venv/Script/activate && python ${pythonScript}`
+          shellOption = 'cmd.exe'
         } else {
-          command = `cd "${pythonDir}" && source venv/bin/activate && python ${pythonScript}`;
+          command = `cd "${pythonDir}" && source venv/bin/activate && python ${pythonScript}`
           console.log(command)
-          shellOption = '/bin/bash';
+          shellOption = '/bin/bash'
         }
-  
-        console.log('[Python] Comando completo:', command);
-  
+
+        console.log('[Python] Comando completo:', command)
+
         // 3. Ejecución con mejor manejo de streams
-        const pythonProcess = exec(command, { 
-          shell: shellOption,
-          cwd: pythonDir, // Establecer directorio de trabajo
-          maxBuffer: 1024 * 1024 * 5 // 5MB buffer
-        }, (error, stdout, stderr) => {
-          if (error) {
-            const errorMsg = `Error: ${error.message}`;
-            console.error('[Python]', errorMsg);
-            dialog.showErrorBox('Error Python', errorMsg);
-            return reject(errorMsg);
+        const pythonProcess = exec(
+          command,
+          {
+            shell: shellOption,
+            cwd: pythonDir, // Establecer directorio de trabajo
+            maxBuffer: 1024 * 1024 * 5 // 5MB buffer
+          },
+          (error, stdout, stderr) => {
+            if (error) {
+              const errorMsg = `Error: ${error.message}`
+              console.error('[Python]', errorMsg)
+              dialog.showErrorBox('Error Python', errorMsg)
+              return reject(errorMsg)
+            }
+            if (stderr) {
+              console.warn('[Python] Advertencias:', stderr)
+              // No rechazar solo por stderr (algunos scripts escriben en stderr normalmente)
+            }
+            console.log('[Python] Resultado:', stdout)
+            resolve(stdout || 'Script ejecutado (sin salida)')
           }
-          if (stderr) {
-            console.warn('[Python] Advertencias:', stderr);
-            // No rechazar solo por stderr (algunos scripts escriben en stderr normalmente)
-          }
-          console.log('[Python] Resultado:', stdout);
-          resolve(stdout || "Script ejecutado (sin salida)");
-        });
-  
+        )
+
         // 4. Manejo de eventos mejorado
         pythonProcess.stdout.on('data', (data) => {
-          console.log('[Python] Salida:', data.toString());
-        });
-  
+          console.log('[Python] Salida:', data.toString())
+        })
+
         pythonProcess.stderr.on('data', (data) => {
-          console.warn('[Python] Error stream:', data.toString());
-        });
-  
+          console.warn('[Python] Error stream:', data.toString())
+        })
+
         pythonProcess.on('exit', (code) => {
-          console.log(`[Python] Proceso terminado con código: ${code}`);
+          console.log(`[Python] Proceso terminado con código: ${code}`)
           if (code !== 0) {
-            reject(`Proceso terminado con código ${code}`);
+            reject(`Proceso terminado con código ${code}`)
           }
-        });
-  
+        })
       } catch (setupError) {
-        console.error('[Python] Error en configuración:', setupError);
-        reject(`Error en configuración: ${setupError.message}`);
+        console.error('[Python] Error en configuración:', setupError)
+        reject(`Error en configuración: ${setupError.message}`)
       }
-    });
-  });
+    })
+  })
 
   // Resto de tu configuración...
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
