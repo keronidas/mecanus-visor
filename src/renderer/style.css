@@ -46,8 +46,8 @@ body {
   top: 0;
   left: 0;
   z-index: 10;
-  width: 450px; /* Ajusta según necesites */
-  height: 300px;
+  width: 100vw; /* Ajusta según necesites */
+  height: auto;
   pointer-events: none; /* Permite interactuar con el canvas debajo */
 }
 
@@ -59,4 +59,23 @@ body {
   font-size: 2rem;
   z-index: 20;
   pointer-events: none;
+}
+#dron-container {
+  position: fixed;
+  top: 0%;
+  left: 0%;
+  width: 25%;  
+  height: 400px;
+  z-index: 1000;
+  pointer-events: none;
+  background-image: url('assets/img/HUD_mapback_edit.png');
+  background-size: contain; 
+  background-repeat: no-repeat; 
+}
+
+canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
 }

@@ -10,7 +10,9 @@ import toastr from 'toastr'
 import 'toastr/build/toastr.min.css'
 
 // Naranja: rgba(255,64,0)
-
+const modeloGroup = new THREE.Group()
+const hudVisor = document.getElementById('dron-container')
+hudVisor.style.visibility = 'hidden'
 const config = {
   camera: {
     fov: 75,
@@ -385,7 +387,7 @@ class distanceInformation {
     this.date.textContent = new Date().toLocaleDateString('es-ES')
   }
   update(msg) {
-    this.distance.textContent = `TRG: ${msg}`
+    this.distance.textContent = `TRG: ${msg}m`
     this.hour.textContent = new Date().toLocaleTimeString('es-ES')
   }
 }
@@ -528,12 +530,12 @@ class TrackingFrame {
       position: fixed;
       width: 40px;
       height: 37.50px;
-      border: 5px solid rgba(255, 0, 0, 1);
       pointer-events: none;
       transform: translate(-50%, -50%);
-      box-shadow: 0 0 10px rgba(255, 0,0 , 1);
       z-index: 2;
       visibility: hidden;
+      border: transparent;
+      boxShadow: transparent;
     `
   }
 
@@ -543,22 +545,49 @@ class TrackingFrame {
     const x = (projected.x * 0.5 + 0.5) * window.innerWidth
     const y = (-(projected.y * 0.5) + 0.5) * window.innerHeight
 
-    if (
-      x > window.innerWidth / 2 - 150 &&
-      x < window.innerWidth / 2 + 200 &&
-      y > window.innerHeight / 2 - 137.5 &&
-      y < window.innerHeight / 2 + 137.5
-    ) {
+    if (targetDistance <= 800) {
+      if (
+        trackingMode &&
+        x > window.innerWidth / 2 - 450 &&
+        x < window.innerWidth / 2 + 500 &&
+        y > window.innerHeight / 2 - 437.5 &&
+        y < window.innerHeight / 2 + 437.5
+      ) {
+        followDrone = true
+      }
       this.element.style.border = `5px solid rgba(0, 143, 57)`
       marcoIA = 'verde'
       this.element.style.boxShadow = `0 0 10px  rgba(0, 143, 57, 0.8)`
-      if (trackingMode) {
-        followDrone = true
-      }
     } else {
-      this.element.style.border = `5px solid rgba(255, 0, 0)`
-      marcoIA = 'rojo'
-      this.element.style.boxShadow = `0 0 10px  rgba(255, 0, 0, 0.8)`
+      if (targetDistance <= 2640 && targetDistance > 800) {
+        if (
+          trackingMode &&
+          x > window.innerWidth / 2 - 450 &&
+          x < window.innerWidth / 2 + 500 &&
+          y > window.innerHeight / 2 - 437.5 &&
+          y < window.innerHeight / 2 + 437.5
+        ) {
+          followDrone = true
+        }
+        this.element.style.border = `5px solid rgba(229, 190, 1)`
+        marcoIA = 'amarillo'
+        this.element.style.boxShadow = `0 0 10px  rgba(229, 190, 1, 0.8)`
+        hudVisor.style.visibility = 'visible'
+      } else {
+        if (targetDistance <= 3000) {
+          boton0pulsado = true
+          followDrone = false
+          this.isCentered = false
+          this.element.style.border = `5px solid rgba(255,64,0)`
+          marcoIA = 'naranja'
+          this.element.style.boxShadow = `0 0 10px  rgba(255,64,0, 0.8)`
+          hudVisor.style.visibility = 'hidden'
+        } else {
+          this.element.style.border = `transparent`
+          this.element.style.boxShadow = `none`
+          marcoIA = 'naranja'
+        }
+      }
     }
 
     if (isBehindCamera) {
@@ -580,10 +609,6 @@ class TrackingFrame {
       this.element.style.left = `${x}px`
       this.element.style.top = `${y}px`
       this.element.style.visibility = showTrackingFrame ? 'visible' : 'hidden'
-    }
-    if (followDrone) {
-      this.element.style.borderColor = 'rgba(0, 143, 57)'
-      this.element.style.boxShadow = '0 0 10px  rgba(0, 143, 57, 0.8)'
     }
   }
 
@@ -621,15 +646,18 @@ class Drone {
   updatePosition() {
     this.angle += config.drone.orbitSpeed
     this.position.x = config.drone.orbitRadius * Math.cos(this.angle * 1.3) * 2
-    this.position.z = config.drone.orbitRadius * Math.sin(this.angle * 0.7) + 3000
-    this.position.y = config.drone.height + Math.sin(this.angle * 2) * config.drone.bobAmount + 1600
+    this.position.z =
+      config.drone.orbitRadius * Math.sin(this.angle * 0.7) +
+      1700 +
+      1500 * Math.cos(clock.getElapsedTime() / 12)
+    this.position.y = config.drone.height + Math.sin(this.angle * 2) * config.drone.bobAmount + 600
     let angleInRadiansX = -Math.atan2(this.position.z, this.position.x) + Math.PI + Math.PI / 2
     let angleInRadiansY = Math.atan2(this.position.y, this.position.z)
     targetDistance = ` ${Math.sqrt(
       this.position.x * this.position.x +
         this.position.y * this.position.y +
         this.position.z * this.position.z
-    ).toFixed(1)}m`
+    ).toFixed(1)}`
     anguloDronCamaraX = angleInRadiansX
     anguloDronCamaraY = angleInRadiansY
     this.model.position.copy(this.position)
@@ -859,7 +887,7 @@ class JoystickControls {
     if (now - lastButtonPressTime < 500) return
 
     if (gamepad.buttons[4]?.touched) {
-      if (marcoIA === 'verde') {
+      if (marcoIA !== 'naranja') {
         if (boton1pulsado) {
           trackingMode = false
           toggleFollowMode()
@@ -867,7 +895,7 @@ class JoystickControls {
           lastButtonPressTime = now
         }
       }
-      if (marcoIA === 'rojo') {
+      if (marcoIA === 'naranja') {
         // Configuración
         toastr.options = {
           positionClass: 'toast-top-right',
@@ -895,7 +923,6 @@ class JoystickControls {
     }
 
     if (gamepadRight.buttons[5]?.pressed) {
-      // showTrackingFrame=!showTrackingFrame
       if (!boton0pulsado) {
         if (!followDrone) {
           trackingMode = false
@@ -1033,7 +1060,8 @@ function init() {
   camera.position.set(...Object.values(config.camera.position))
   camera.rotateY(-Math.PI / 2)
   camera.zoom = zoomLevel
-
+  camera.add(modeloGroup)
+  scene.add(camera)
   const controls = new JoystickControls(camera)
   trackingFrame = new TrackingFrame()
   const info = new DataInfo()
@@ -1053,7 +1081,7 @@ function init() {
 
   new GLTFLoader().load('assets/models/mavic.glb', (gltf) => {
     const model = gltf.scene
-    model.scale.set(1, 1, 1)
+    model.scale.set(0.2, 0.2, 0.2)
     scene.add(model)
 
     // 1. Verificar si el modelo tiene animaciones
@@ -1072,6 +1100,13 @@ function init() {
 
     droneInstance = new Drone(model)
   })
+
+  // new GLTFLoader().load('assets/models/mavic.glb', (gltf) => {
+  //   const model = gltf.scene
+  //   model.scale.set(1, 1, 1)
+  //   model.position.set(1, 1, 1)
+  //   scene.add(model)
+  // })
 
   new GLTFLoader().load('assets/models/MSP_VAMTAC.glb', (gltf) => {
     const model = gltf.scene
@@ -1171,6 +1206,8 @@ function init() {
       }
       if (trackingMode) {
         controls.increaseAngles(30)
+        zoomingMax=false
+        zoomingMin=false
       }
       if (secondTracking && now <= max) {
         const yawDeg = ((controls.yaw * 180) / Math.PI).toFixed(2)
@@ -1216,7 +1253,7 @@ function init() {
         }
       }
     }
-
+    console.log('distance', targetDistance)
     map.update()
 
     renderer.render(scene, camera)
