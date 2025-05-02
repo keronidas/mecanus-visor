@@ -11,8 +11,9 @@ import 'toastr/build/toastr.min.css'
 
 // Naranja: rgba(255,64,0)
 const modeloGroup = new THREE.Group()
-const hudVisor = document.getElementById('dron-container')
-hudVisor.style.visibility = 'hidden'
+// const hudVisor = document.getElementById('dron-container')
+// hudVisor.style.visibility = 'hidden'
+let boton5Pulsado = false
 const config = {
   camera: {
     fov: 75,
@@ -41,6 +42,7 @@ const config = {
     10: { ejeX: 0, ejeY: 0 }
   }
 }
+
 let marcoIA = ''
 let min = 0
 let max = 0.7
@@ -63,17 +65,20 @@ let trackingMode = false
 const clock = new THREE.Clock()
 let lastButtonPressTime = 0
 let zoomLevel = 1
-const zoomSpeed = 2
+const zoomSpeed = 4
 const minZoom = 1
-const maxZoom = 10
+const maxZoom = 20
 let ejex = ''
 let ejey = ''
 let zoomingMax = false
 let zoomingMin = false
 let anguloDronCamaraX = 0
 let anguloDronCamaraY = 0
-let targetDistance = '---------'
+let targetDistance = 3500
 let secondTracking = false
+let efectiveWatch = targetDistance / zoomLevel
+let ia_status = false
+let target_status = false
 GamepadManager.init()
 document.documentElement.style.setProperty('--zoomLevel', zoomLevel)
 
@@ -141,6 +146,65 @@ class Map {
     }
   }
 }
+class Marcadores {
+  constructor() {
+    this.ia = document.createElement('div')
+    this.target = document.createElement('div')
+    this.initStyles()
+  }
+
+  initStyles() {
+    this.ia.style.cssText = `
+      position: fixed;
+      top: 56.6%;
+      left: 97.1%;
+      clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 70%);
+      width: 4.2%;
+      height: 13%;
+      background-color: transparent;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+      pointer-events: none;`
+
+    this.target.style.cssText = `
+      position: fixed;
+      top: 42.8%;
+      left: 97.1%;
+      width: 4.2%;
+      height: 13%;
+      clip-path: polygon(0% 100%, 100% 100%, 100% 0%, 0% 30%);
+      background-color: transparent;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+      pointer-events: none;`
+
+    document.body.appendChild(this.ia)
+    document.body.appendChild(this.target)
+  }
+
+  activateIA() {
+    ia_status = !ia_status
+  }
+
+  activateTarget() {
+    target_status = !target_status
+  }
+
+  update() {
+    if (ia_status) {
+      this.ia.style.backgroundColor = `blue`
+    } else {
+      this.ia.style.backgroundColor = 'transparent'
+    }
+    if (target_status) {
+      this.target.style.backgroundColor = 'rgba(255,64,0)'
+    } else {
+      this.target.style.backgroundColor = 'transparent'
+    }
+  }
+}
+
+// Para que funcione, asegúrate de instanciar la clase:
 
 class Viewfinder {
   constructor() {
@@ -414,7 +478,7 @@ class ZoomIndicator {
   }
 
   update(zoomLevel) {
-    this.element.textContent = ` x${zoomLevel.toFixed(1)}`
+    this.element.textContent = ` x${(zoomLevel * 1.525 - 0.5).toFixed(1)}`
 
     // this.element.style.display = followDrone ? 'block' : 'none'
   }
@@ -495,8 +559,8 @@ class Cross {
     `
   }
   update() {
-    const newPositionH = 20 - (1 - zoomLevel) * 22.5
-    const newPositionV = 20 - (1 - zoomLevel) * 40
+    const newPositionH = 20 - ((1 - zoomLevel) * 22.5) / 2
+    const newPositionV = 20 - ((1 - zoomLevel) * 40) / 2
 
     this.horizontalLineRight.style.left = `${newPositionV}px`
     this.horizontalLineLeft.style.left = `${-20 - newPositionV}px`
@@ -544,25 +608,30 @@ class TrackingFrame {
     const isBehindCamera = projected.z > 1
     const x = (projected.x * 0.5 + 0.5) * window.innerWidth
     const y = (-(projected.y * 0.5) + 0.5) * window.innerHeight
+    efectiveWatch = targetDistance / zoomLevel
+    // if (isDetected) {
+    //   efectiveWatch = efectiveWatch * 2
+    // }
 
-    if (targetDistance <= 800) {
+    if (efectiveWatch <= 80) {
       if (
         trackingMode &&
-        x > window.innerWidth / 2 - 450 &&
+        x > window.innerWidth / 2 - 500 &&
         x < window.innerWidth / 2 + 500 &&
         y > window.innerHeight / 2 - 437.5 &&
         y < window.innerHeight / 2 + 437.5
       ) {
         followDrone = true
       }
+
       this.element.style.border = `5px solid rgba(0, 143, 57)`
       marcoIA = 'verde'
       this.element.style.boxShadow = `0 0 10px  rgba(0, 143, 57, 0.8)`
     } else {
-      if (targetDistance <= 2640 && targetDistance > 800) {
+      if (efectiveWatch <= 132 && efectiveWatch > 60) {
         if (
           trackingMode &&
-          x > window.innerWidth / 2 - 450 &&
+          x > window.innerWidth / 2 - 500 &&
           x < window.innerWidth / 2 + 500 &&
           y > window.innerHeight / 2 - 437.5 &&
           y < window.innerHeight / 2 + 437.5
@@ -572,17 +641,24 @@ class TrackingFrame {
         this.element.style.border = `5px solid rgba(229, 190, 1)`
         marcoIA = 'amarillo'
         this.element.style.boxShadow = `0 0 10px  rgba(229, 190, 1, 0.8)`
-        hudVisor.style.visibility = 'visible'
+        // hudVisor.style.visibility = 'visible'
       } else {
-        if (targetDistance <= 3000) {
+        if (efectiveWatch <= 160 && efectiveWatch > 132) {
           boton0pulsado = true
+
           followDrone = false
           this.isCentered = false
           this.element.style.border = `5px solid rgba(255,64,0)`
           marcoIA = 'naranja'
+          target_status = false
+          marcador.update()
           this.element.style.boxShadow = `0 0 10px  rgba(255,64,0, 0.8)`
-          hudVisor.style.visibility = 'hidden'
+          // hudVisor.style.visibility = 'hidden'
         } else {
+          boton0pulsado = true
+
+          followDrone = false
+          this.isCentered = false
           this.element.style.border = `transparent`
           this.element.style.boxShadow = `none`
           marcoIA = 'naranja'
@@ -648,9 +724,13 @@ class Drone {
     this.position.x = config.drone.orbitRadius * Math.cos(this.angle * 1.3) * 2
     this.position.z =
       config.drone.orbitRadius * Math.sin(this.angle * 0.7) +
-      1700 +
-      1500 * Math.cos(clock.getElapsedTime() / 12)
-    this.position.y = config.drone.height + Math.sin(this.angle * 2) * config.drone.bobAmount + 600
+      2000 +
+      1700 * Math.cos(clock.getElapsedTime() / 12)
+    this.position.y =
+      config.drone.height +
+      Math.sin(this.angle * 2) * config.drone.bobAmount +
+      400 +
+      100 * Math.cos(clock.getElapsedTime() / 12)
     let angleInRadiansX = -Math.atan2(this.position.z, this.position.x) + Math.PI + Math.PI / 2
     let angleInRadiansY = Math.atan2(this.position.y, this.position.z)
     targetDistance = ` ${Math.sqrt(
@@ -668,6 +748,7 @@ class Drone {
     this.updatePosition()
   }
 }
+const marcador = new Marcadores()
 class JoystickControls {
   constructor(camera) {
     this.camera = camera
@@ -735,7 +816,7 @@ class JoystickControls {
     if (gamepadRight.buttons[4]?.touched && gamepadRight.buttons[4]?.value > 0) {
       trackingMode = true
       if (trackingMode) {
-        updateCameraZoom(3)
+        updateCameraZoom(10)
       } else {
         followDrone = false
         updateCameraZoom(1)
@@ -889,6 +970,8 @@ class JoystickControls {
     if (gamepad.buttons[4]?.touched) {
       if (marcoIA !== 'naranja') {
         if (boton1pulsado) {
+          marcador.activateTarget()
+          marcador.update()
           trackingMode = false
           toggleFollowMode()
           boton0pulsado = !boton0pulsado
@@ -922,15 +1005,23 @@ class JoystickControls {
       }
     }
 
-    if (gamepadRight.buttons[5]?.pressed) {
-      if (!boton0pulsado) {
-        if (!followDrone) {
-          trackingMode = false
+    if (gamepadRight.buttons[5]?.touched && gamepadRight.buttons[5]?.value > 0) {
+      if (!boton5Pulsado) {
+        // Cambié el nombre a boton5Pulsado para coincidir con el botón 5
+        if (!boton0pulsado) {
+          if (!followDrone) {
+            trackingMode = false
+          }
+          trackingFrame.toggle()
+          boton1pulsado = !boton1pulsado
+          lastButtonPressTime = now
         }
-        trackingFrame.toggle()
-        boton1pulsado = !boton1pulsado
-        lastButtonPressTime = now
+        marcador.activateIA()
+        marcador.update()
+        boton5Pulsado = true // Marcamos que el botón 5 fue pulsado
       }
+    } else {
+      boton5Pulsado = false // Resetear cuando el botón ya no está siendo presionado
     }
   }
 
@@ -943,7 +1034,11 @@ class JoystickControls {
 function updateCameraZoom(num) {
   if (num > 1) {
     const delta = Math.min(clock.getDelta(), 0.1)
-    zoomLevel = THREE.MathUtils.clamp(zoomLevel + zoomSpeed * delta * 50, minZoom, num)
+    if (zoomLevel < num) {
+      zoomLevel = THREE.MathUtils.clamp(zoomLevel + zoomSpeed * delta * 50, minZoom, num)
+    } else {
+      zoomLevel = THREE.MathUtils.clamp(zoomLevel - zoomSpeed * delta * 50, minZoom, num)
+    }
   }
   if (num === 1) {
     const delta = Math.min(clock.getDelta(), 0.1)
@@ -1205,9 +1300,9 @@ function init() {
         trackingFrame.update(droneInstance.position, camera)
       }
       if (trackingMode) {
-        controls.increaseAngles(30)
-        zoomingMax=false
-        zoomingMin=false
+        controls.increaseAngles(45)
+        zoomingMax = false
+        zoomingMin = false
       }
       if (secondTracking && now <= max) {
         const yawDeg = ((controls.yaw * 180) / Math.PI).toFixed(2)
