@@ -3,7 +3,13 @@ import { electronAPI } from '@electron-toolkit/preload';
 
 const api = {
   runPythonApp: () => ipcRenderer.invoke('run-python-app'),
-  getPythonStatus: () => ipcRenderer.invoke('get-python-status')
+  stopPythonApp: () => ipcRenderer.invoke('stop-python-app'),
+  checkPythonAlive: () => ipcRenderer.invoke('check-python-alive'),
+  enviarComandoUDP: (comando) => ipcRenderer.invoke('enviar-comando-udp', comando),
+  // Añade esto para mantener la conexión
+  onPythonStatusChange: (callback) => {
+    ipcRenderer.on('python-status-change', (event, status) => callback(status));
+  }
 };
 
 if (process.contextIsolated) {

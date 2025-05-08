@@ -8,7 +8,27 @@ import toastr from 'toastr'
 
 // Importar los estilos de Toastr
 import 'toastr/build/toastr.min.css'
+function ajustarPos(obj) {
+  const dosPi = 2 * Math.PI;
 
+  function ajustar(punto) {
+    if (!punto) return;
+    punto.ejeX = ((punto.ejeX % dosPi) + dosPi) % dosPi;
+    punto.ejeY = ((punto.ejeY % dosPi) + dosPi) % dosPi;
+  }
+
+  ajustar(obj.home);
+  ajustar(obj[8]);
+  ajustar(obj[9]);
+  ajustar(obj[10]);
+}
+const motor1Torreta = 'EA000055000003AABB'
+const motor2Torreta = 'EA000055000004AABB'
+const levantar30Torreta = 'EA0008550000080000000041F00000AABB'
+const movimientoTorreta = 'EA000855000007C0DB333341F00000AABB'
+const pararMotor1Torreta = 'EA000055000005AABB'
+const pararMotor2Torreta = 'EA000055000006AABB'
+let estadoMotorArrancado = false
 // Naranja: rgba(255,64,0)
 const modeloGroup = new THREE.Group()
 // const hudVisor = document.getElementById('dron-container')
@@ -352,8 +372,8 @@ class DataInfo {
   setText(ejeX, ejeY) {
     ejeY = parseFloat(ejeY)
     ejeY = ejeY.toFixed(1)
-    this.horizontalAxes.innerText = ejeX
-    this.verticalAxes.innerText = ejeY
+    this.horizontalAxes.innerText = ejeX + 'º'
+    this.verticalAxes.innerText = ejeY + 'º'
   }
 
   update(ejeX, ejeY) {
@@ -735,8 +755,8 @@ class Drone {
     let angleInRadiansY = Math.atan2(this.position.y, this.position.z)
     targetDistance = ` ${Math.sqrt(
       this.position.x * this.position.x +
-        this.position.y * this.position.y +
-        this.position.z * this.position.z
+      this.position.y * this.position.y +
+      this.position.z * this.position.z
     ).toFixed(1)}`
     anguloDronCamaraX = angleInRadiansX
     anguloDronCamaraY = angleInRadiansY
@@ -777,23 +797,23 @@ class JoystickControls {
     this.yaw = anguloDronCamaraX
     this.pitch = anguloDronCamaraY
   }
-  goPosition(valuex, valuey) {
+  goPosition(valuex, valuey, zoom = 1) {
     valuex = (valuex.toFixed(2) * 180) / Math.PI
     valuey = (valuey.toFixed(2) * 180) / Math.PI
     const gradoxActual = (this.yaw.toFixed(2) * 180) / Math.PI
     const gradoyActual = (this.pitch.toFixed(2) * 180) / Math.PI
 
     if (gradoxActual < valuex) {
-      this.yaw += 0.01
+      this.yaw += 0.01 / zoom
     }
     if (gradoxActual > valuex) {
-      this.yaw -= 0.01
+      this.yaw -= 0.01 / zoom
     }
     if (gradoyActual < valuey) {
-      this.pitch += 0.01
+      this.pitch += 0.01 / zoom
     }
     if (gradoyActual > valuey) {
-      this.pitch -= 0.01
+      this.pitch -= 0.01 / zoom
     }
     if (gradoxActual === valuex && gradoyActual === valuey) {
       returnMomentHome = false
@@ -810,16 +830,50 @@ class JoystickControls {
     ejex = this.yaw
     if (!gamepad) return
 
-    if (!gamepadRight.buttons[3]?.touched || gamepadRight.buttons[3]?.value < 1) {
+    if (!gamepadRight.buttons[4]?.touched || gamepadRight.buttons[4]?.value < 1) {
       secondTracking = false
+
     }
-    if (gamepadRight.buttons[4]?.touched && gamepadRight.buttons[4]?.value > 0) {
+    if (!gamepadRight.buttons[3]?.touched && gamepadRight.buttons[3]?.value < 1) {
+      if (estadoMotorArrancado) {
+        window.api.enviarComandoUDP(pararMotor1Torreta);
+        window.api.enviarComandoUDP(pararMotor2Torreta);
+        estadoMotorArrancado = false
+
+      }
+    }
+
+    if (gamepadRight.buttons[3]?.touched && gamepadRight.buttons[3]?.value > 0) {
       trackingMode = true
       if (trackingMode) {
         updateCameraZoom(10)
+        if (!estadoMotorArrancado) {
+          estadoMotorArrancado = !estadoMotorArrancado
+          const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+          const ejecutarComandos = async () => {
+            console.log("bucle torreta")
+            window.api.enviarComandoUDP(motor1Torreta);
+            await delay(100)
+            window.api.enviarComandoUDP(motor2Torreta);
+            await delay(100)
+
+
+            // Esperar 2 segundos
+
+            window.api.enviarComandoUDP(movimientoTorreta);
+          }
+
+          ejecutarComandos()
+        }
       } else {
         followDrone = false
         updateCameraZoom(1)
+        if (estadoMotorArrancado) {
+          window.api.enviarComandoUDP(pararMotor1Torreta);
+          window.api.enviarComandoUDP(pararMotor2Torreta);
+
+        }
       }
     } else {
       trackingMode = false
@@ -850,9 +904,10 @@ class JoystickControls {
       zoomLevel = THREE.MathUtils.clamp(zoomLevel - zoomSpeed * delta, minZoom, maxZoom)
       updateCameraZoom()
     }
-    if (gamepadRight.buttons[3]?.touched && gamepadRight.buttons[3]?.value > 0) {
+    if (gamepadRight.buttons[4]?.touched && gamepadRight.buttons[4]?.value > 0) {
       if (config.position[8].ejeX.toFixed(0) != 0 && config.position[9].ejeX.toFixed(0) != 0) {
         secondTracking = true
+
       }
     }
     if (gamepadRight.buttons[7]?.pressed) {
@@ -945,14 +1000,7 @@ class JoystickControls {
       const lookX = this.applyDeadZone(gamepad.axes[0], config.gamepad.deadZone)
       const lookY = this.applyDeadZone(gamepad.axes[1], config.gamepad.deadZone)
 
-      if (gamepad.buttons[0].touched) {
-        this.yaw -= (lookX * config.controls.rotationSpeed * delta) / (zoomLevel * 5)
-        this.pitch = THREE.MathUtils.clamp(
-          this.pitch - (lookY * config.controls.rotationSpeed * delta) / (zoomLevel * 5),
-          config.controls.verticalMin,
-          config.controls.verticalMax
-        )
-      } else {
+      if (gamepad.buttons[0].touched && gamepadLeft.buttons[0].touched) {
         this.yaw -= (lookX * config.controls.rotationSpeed * delta) / zoomLevel
         this.pitch = THREE.MathUtils.clamp(
           this.pitch - (lookY * config.controls.rotationSpeed * delta) / zoomLevel,
@@ -960,6 +1008,14 @@ class JoystickControls {
           config.controls.verticalMax
         )
       }
+      // else {
+      //   this.yaw -= (lookX * config.controls.rotationSpeed * delta) / zoomLevel
+      //   this.pitch = THREE.MathUtils.clamp(
+      //     this.pitch - (lookY * config.controls.rotationSpeed * delta) / zoomLevel,
+      //     config.controls.verticalMin,
+      //     config.controls.verticalMax
+      //   )
+      // }
 
       this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'))
     }
@@ -1005,7 +1061,7 @@ class JoystickControls {
       }
     }
 
-    if (gamepadRight.buttons[5]?.touched && gamepadRight.buttons[5]?.value > 0) {
+    if (gamepadRight.buttons[6]?.touched && gamepadRight.buttons[6]?.value > 0) {
       if (!boton5Pulsado) {
         // Cambié el nombre a boton5Pulsado para coincidir con el botón 5
         if (!boton0pulsado) {
@@ -1264,8 +1320,10 @@ function init() {
   function animate() {
     requestAnimationFrame(animate)
     const delta = Math.min(clock.getDelta(), 0.1)
+    ajustarPos(config.position)
     info.update(toNormalizedDegrees(ejex), toNormalizedDegreesY(ejey))
     controls.update(delta)
+    ajustarPos(config.position)
     zoomIndicator.update(zoomLevel)
     viewfinder.updateAngle(180 - 60 / zoomLevel, toNormalizedDegrees(ejex))
     if (droneInstance) {
@@ -1300,7 +1358,7 @@ function init() {
         trackingFrame.update(droneInstance.position, camera)
       }
       if (trackingMode) {
-        controls.increaseAngles(45)
+        controls.increaseAngles(30)
         zoomingMax = false
         zoomingMin = false
       }
@@ -1314,7 +1372,7 @@ function init() {
         if (!phase) {
           // Fase 1: Movimiento hacia posición 8
           if (Math.abs(yawDeg - pos8Deg) > 1.0) {
-            controls.goPosition(config.position[8].ejeX, now)
+            controls.goPosition(config.position[8].ejeX, now, zoomLevel)
           } else if (Math.abs(pitchDeg - nowDeg) <= 1.0) {
             // Cambia a fase 2 cuando llega a posición 8
             phase = true
@@ -1331,7 +1389,7 @@ function init() {
         } else {
           // Fase 2: Movimiento hacia posición 9
           if (Math.abs(yawDeg - pos9Deg) > 1.0) {
-            controls.goPosition(config.position[9].ejeX, now)
+            controls.goPosition(config.position[9].ejeX, now, zoomLevel)
           } else if (Math.abs(pitchDeg - nowDeg) <= 1.0) {
             // Cambia a fase 1 cuando llega a posición 9
             phase = false
@@ -1348,7 +1406,7 @@ function init() {
         }
       }
     }
-    console.log('distance', targetDistance)
+    // console.log('distance', targetDistance)
     map.update()
 
     renderer.render(scene, camera)

@@ -2,19 +2,15 @@ import { app, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-const { exec } = require('child_process')
+import { spawn } from 'child_process'
 const path = require('path')
+const dgram = require('dgram')
 const os = require('os')
 
 // Configuración de rutas
-const pythonDir = path.join(
-  os.homedir(),
-  'Documents',
-  'entornos',
-  'mi_entorno',
-  'aplicacionfeindef'
-)
+const pythonDir = path.join(os.homedir(), 'Desktop', 'FEINDEF')
 const pythonScript = 'integrado_V8.py'
+let pythonProcessRef = null
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -33,7 +29,6 @@ function createWindow() {
     }
   })
 
-  mainWindow.webContents.openDevTools()
   mainWindow.maximize()
   mainWindow.setBounds({
     x: 0,
@@ -41,11 +36,20 @@ function createWindow() {
     width: 1920,
     height: 1080
   })
-
+  // mainWindow.webContents.openDevTools()
+  // Añadir estos manejadores IPC
+  ipcMain.handle('check-python-alive', async () => {
+    if (!pythonProcessRef) return false
+    try {
+      process.kill(pythonProcessRef.pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  })
   // Manejo del comando Python mejorado
   ipcMain.handle('run-python-app', async () => {
     return new Promise((resolve, reject) => {
-      // 1. Verificar existencia del directorio Python
       const fs = require('fs')
       if (!fs.existsSync(pythonDir)) {
         const errorMsg = `Directorio Python no encontrado: ${pythonDir}`
@@ -54,62 +58,101 @@ function createWindow() {
         return reject(errorMsg)
       }
 
-      // 2. Construcción del comando mejorada
-      let command, shellOption
+      let command, args
+
+      if (process.platform === 'win32') {
+        command = 'cmd.exe'
+        args = ['/c', `cd /d "${pythonDir}" && venv\\Scripts\\activate && python ${pythonScript}`]
+      } else {
+        command = 'bash'
+        args = ['-c', `cd "${pythonDir}" && echo "seom2" | sudo -S python3 ${pythonScript}`]
+      }
+
+
+
+      pythonProcessRef = spawn(command, args, {
+        cwd: pythonDir,
+        detached: true, // Considerar si detached es realmente necesario si la ventana principal no se cierra
+        stdio: ['pipe', 'pipe', 'pipe'] // 'inherit' puede ser útil para debugging directo en la consola de Electron
+      })
+
+      // pythonProcessRef.unref(); // Si no es detached y quieres que Python muera con Electron, no uses unref.
+      // Si quieres que Python siga si Electron cierra, detached y unref son correctos.
+
+      pythonProcessRef.stdout.on('data', (data) => {
+        console.log('[Python] STDOUT:', data.toString())
+        // Podrías enviar esto al renderer si es útil: focusedWindow.webContents.send('python-stdout', data.toString());
+      })
+
+      pythonProcessRef.stderr.on('data', (data) => {
+        console.error('[Python] STDERR:', data.toString())
+        // focusedWindow.webContents.send('python-stderr', data.toString());
+      })
+
+      pythonProcessRef.on('close', (code) => {
+        console.log(`[Python] Proceso terminado con código ${code}`)
+        const oldPythonProcessRef = pythonProcessRef // Capturar la referencia actual
+        pythonProcessRef = null
+
+        // 👉 YA NO SE MUESTRA LA VENTANA (porque no se ocultó)
+        // OJO: si python crashea y la ventana se cerró por otra razón, focusedWindow podría ser null.
+        // const currentFocusedWindow = BrowserWindow.getFocusedWindow(); // Obtener la ventana actual por si cambió
+        // if (currentFocusedWindow && oldPythonProcessRef) { // Asegurarse que hablamos de la ventana asociada a este proceso
+        //    currentFocusedWindow.show();
+        // }
+
+        if (code !== 0) return reject(`Error código ${code}`)
+        resolve('Script ejecutado correctamente')
+      })
+
+      pythonProcessRef.on('error', (err) => {
+        console.error('[Python] Error del proceso:', err)
+        // Aquí también, si la ventana fue ocultada, considerar mostrarla en caso de error al lanzar
+        // const focusedWindow = BrowserWindow.getFocusedWindow();
+        // if (focusedWindow) {
+        //   focusedWindow.show();
+        // }
+        reject(err.message)
+      })
+    })
+  })
+  ipcMain.handle('enviar-comando-udp', async (event, comando) => {
+    const client = dgram.createSocket('udp4')
+
+    const HOST = '192.168.100.80' // Dirección IP destino
+    const PORT = 5678 // Puerto destino
+
+    const comandoHex = comando
+    const buffer = Buffer.from(comandoHex, 'hex')
+
+    client.send(buffer, 0, buffer.length, PORT, HOST, (err) => {
+      if (err) {
+        console.error('Error al enviar el comando UDP:', err)
+      } else {
+        console.log('Comando UDP enviado correctamente.')
+      }
+      client.close()
+    })
+  })
+  ipcMain.handle('stop-python-app', async () => {
+    return new Promise((resolve, reject) => {
+      if (!pythonProcessRef) {
+        return reject('No hay proceso Python en ejecución')
+      }
+
       try {
+        // Detener el proceso de manera más segura
         if (process.platform === 'win32') {
-          command = `cd /d "${pythonDir}" venv/Script/activate && python ${pythonScript}`
-          shellOption = 'cmd.exe'
+          spawn('taskkill', ['/pid', pythonProcessRef.pid, '/f', '/t'])
         } else {
-          command = `cd "${pythonDir}" && source venv/bin/activate && python ${pythonScript}`
-          console.log(command)
-          shellOption = '/bin/bash'
+          process.kill(-pythonProcessRef.pid)
         }
-
-        console.log('[Python] Comando completo:', command)
-
-        // 3. Ejecución con mejor manejo de streams
-        const pythonProcess = exec(
-          command,
-          {
-            shell: shellOption,
-            cwd: pythonDir, // Establecer directorio de trabajo
-            maxBuffer: 1024 * 1024 * 5 // 5MB buffer
-          },
-          (error, stdout, stderr) => {
-            if (error) {
-              const errorMsg = `Error: ${error.message}`
-              console.error('[Python]', errorMsg)
-              dialog.showErrorBox('Error Python', errorMsg)
-              return reject(errorMsg)
-            }
-            if (stderr) {
-              console.warn('[Python] Advertencias:', stderr)
-              // No rechazar solo por stderr (algunos scripts escriben en stderr normalmente)
-            }
-            console.log('[Python] Resultado:', stdout)
-            resolve(stdout || 'Script ejecutado (sin salida)')
-          }
-        )
-
-        // 4. Manejo de eventos mejorado
-        pythonProcess.stdout.on('data', (data) => {
-          console.log('[Python] Salida:', data.toString())
-        })
-
-        pythonProcess.stderr.on('data', (data) => {
-          console.warn('[Python] Error stream:', data.toString())
-        })
-
-        pythonProcess.on('exit', (code) => {
-          console.log(`[Python] Proceso terminado con código: ${code}`)
-          if (code !== 0) {
-            reject(`Proceso terminado con código ${code}`)
-          }
-        })
-      } catch (setupError) {
-        console.error('[Python] Error en configuración:', setupError)
-        reject(`Error en configuración: ${setupError.message}`)
+        pythonProcessRef = null
+        resolve('Proceso Python detenido correctamente')
+      } catch (e) {
+        console.error('[Python] Error al detener:', e)
+        pythonProcessRef = null
+        reject('No se pudo detener el proceso')
       }
     })
   })

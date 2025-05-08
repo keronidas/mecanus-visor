@@ -43,7 +43,7 @@ export class GamepadManager {
 
     // Asignar mandos izquierdo y derecho
     else if (gp.buttons.length >= 12) {
-      const lastButton = gp.buttons[gp.buttons.length - 1]
+      const lastButton = gp.buttons[11]
       const isPressed = lastButton.pressed || lastButton.value > 0.9
 
       // Si está presionado y left no está asignado, es el izquierdo
