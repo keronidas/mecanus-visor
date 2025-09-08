@@ -135,7 +135,7 @@ function handleGamepadInput() {
     else if (shouldReturnToIndex()) {
       navigateTo('index.html');
     }
-    if(!actualButton1&&!actualButton2){
+    if (!actualButton1 && !actualButton2) {
       navigateTo('index.html');
     }
   }

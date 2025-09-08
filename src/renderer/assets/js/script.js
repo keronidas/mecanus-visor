@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader'
 import { RGBELoader } from 'three/addons/loaders/RGBELoader'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { GamepadManager } from './gamepadManager'
+import { GamepadManager } from './gamepadPlay'
 import toastr from 'toastr'
 
 // Importar los estilos de Toastr
@@ -22,13 +22,7 @@ function ajustarPos(obj) {
   ajustar(obj[9]);
   ajustar(obj[10]);
 }
-const motor1Torreta = 'EA000055000003AABB'
-const motor2Torreta = 'EA000055000004AABB'
-const levantar30Torreta = 'EA0008550000080000000041F00000AABB'
-const movimientoTorreta = 'EA000855000007C0DB333341F00000AABB'
-const pararMotor1Torreta = 'EA000055000005AABB'
-const pararMotor2Torreta = 'EA000055000006AABB'
-let estadoMotorArrancado = false
+
 // Naranja: rgba(255,64,0)
 const modeloGroup = new THREE.Group()
 // const hudVisor = document.getElementById('dron-container')
@@ -63,6 +57,7 @@ const config = {
   }
 }
 
+let droneSize = 4
 let marcoIA = ''
 let min = 0
 let max = 0.7
@@ -823,68 +818,37 @@ class JoystickControls {
     }
   }
   update(delta) {
-    const gamepadRight = GamepadManager.getActiveGamepad('right')
-    const gamepad = GamepadManager.getActiveGamepad('joystick')
-    const gamepadLeft = GamepadManager.getActiveGamepad('left')
+    const gamepad = GamepadManager.getGamepad()
+
     ejey = this.pitch
     ejex = this.yaw
     if (!gamepad) return
 
-    if (!gamepadRight.buttons[4]?.touched || gamepadRight.buttons[4]?.value < 1) {
+    if (!gamepad.buttons[4]?.touched || gamepad.buttons[4]?.value < 1) {
       secondTracking = false
 
     }
-    if (!gamepadRight.buttons[3]?.touched && gamepadRight.buttons[3]?.value < 1) {
-      if (estadoMotorArrancado) {
-        window.api.enviarComandoUDP(pararMotor1Torreta);
-        window.api.enviarComandoUDP(pararMotor2Torreta);
-        estadoMotorArrancado = false
 
-      }
-    }
 
-    if (gamepadRight.buttons[3]?.touched && gamepadRight.buttons[3]?.value > 0) {
+    if (gamepad.buttons[3]?.touched && gamepad.buttons[3]?.value > 0) {
       trackingMode = true
       if (trackingMode) {
         updateCameraZoom(10)
-        if (!estadoMotorArrancado) {
-          estadoMotorArrancado = !estadoMotorArrancado
-          const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-          const ejecutarComandos = async () => {
-            console.log("bucle torreta")
-            window.api.enviarComandoUDP(motor1Torreta);
-            await delay(100)
-            window.api.enviarComandoUDP(motor2Torreta);
-            await delay(100)
-
-
-            // Esperar 2 segundos
-
-            window.api.enviarComandoUDP(movimientoTorreta);
-          }
-
-          ejecutarComandos()
-        }
       } else {
         followDrone = false
         updateCameraZoom(1)
-        if (estadoMotorArrancado) {
-          window.api.enviarComandoUDP(pararMotor1Torreta);
-          window.api.enviarComandoUDP(pararMotor2Torreta);
 
-        }
       }
     } else {
       trackingMode = false
       updateCameraZoom()
     }
 
-    if (gamepadLeft.buttons[3]?.touched && gamepadLeft.buttons[3]?.value > 0) {
+    if (gamepad.buttons[3]?.touched && gamepad.buttons[3]?.value > 0) {
       zoomingMin = true
       updateCameraZoom()
     }
-    if (gamepadLeft.buttons[8]?.touched && gamepadLeft.buttons[8]?.value > 0) {
+    if (gamepad.buttons[8]?.touched && gamepad.buttons[8]?.value > 0) {
       zoomingMax = true
       updateCameraZoom()
     }
@@ -897,28 +861,28 @@ class JoystickControls {
       updateCameraZoom()
     }
 
-    if (gamepad.buttons[3]?.pressed && gamepad.buttons[3]?.value > 0) {
+    if (gamepad.buttons[0]?.pressed && gamepad.buttons[0]?.value > 0) {
       if (!followDrone) {
         trackingMode = false
       }
       zoomLevel = THREE.MathUtils.clamp(zoomLevel - zoomSpeed * delta, minZoom, maxZoom)
       updateCameraZoom()
     }
-    if (gamepadRight.buttons[4]?.touched && gamepadRight.buttons[4]?.value > 0) {
+    if (gamepad.buttons[4]?.touched && gamepad.buttons[4]?.value > 0) {
       if (config.position[8].ejeX.toFixed(0) != 0 && config.position[9].ejeX.toFixed(0) != 0) {
         secondTracking = true
 
       }
     }
-    if (gamepadRight.buttons[7]?.pressed) {
+    if (gamepad.buttons[2]?.pressed) {
       returnMomentHome = true
     }
 
-    if (gamepadRight && gamepadRight.buttons) {
-      const BUTTON_IDS = [8, 9, 10] // Lista de los botones que están siendo manejados
+    if (gamepad) {
+      const BUTTON_IDS = [11, 9, 10] // Lista de los botones que están siendo manejados
 
       BUTTON_IDS.forEach((buttonIndex) => {
-        const button = gamepadRight.buttons[buttonIndex]
+        const button = gamepad.buttons[buttonIndex]
 
         if (button) {
           const isButtonPressed = button.pressed
@@ -975,7 +939,7 @@ class JoystickControls {
               ejey = this.pitch
 
               // Definir retorno de posición para cada botón
-              if (buttonIndex == 8) {
+              if (buttonIndex == 11) {
                 returnMoment8 = true
               }
               if (buttonIndex == 9) {
@@ -1000,14 +964,14 @@ class JoystickControls {
       const lookX = this.applyDeadZone(gamepad.axes[0], config.gamepad.deadZone)
       const lookY = this.applyDeadZone(gamepad.axes[1], config.gamepad.deadZone)
 
-      if (gamepad.buttons[0].touched && gamepadLeft.buttons[0].touched) {
+    
         this.yaw -= (lookX * config.controls.rotationSpeed * delta) / zoomLevel
         this.pitch = THREE.MathUtils.clamp(
           this.pitch - (lookY * config.controls.rotationSpeed * delta) / zoomLevel,
           config.controls.verticalMin,
           config.controls.verticalMax
         )
-      }
+      
       // else {
       //   this.yaw -= (lookX * config.controls.rotationSpeed * delta) / zoomLevel
       //   this.pitch = THREE.MathUtils.clamp(
@@ -1061,7 +1025,7 @@ class JoystickControls {
       }
     }
 
-    if (gamepadRight.buttons[6]?.touched && gamepadRight.buttons[6]?.value > 0) {
+    if (gamepad.buttons[7]?.touched && gamepad.buttons[7]?.value > 0) {
       if (!boton5Pulsado) {
         // Cambié el nombre a boton5Pulsado para coincidir con el botón 5
         if (!boton0pulsado) {
@@ -1232,7 +1196,7 @@ function init() {
 
   new GLTFLoader().load('assets/models/mavic.glb', (gltf) => {
     const model = gltf.scene
-    model.scale.set(0.2, 0.2, 0.2)
+    model.scale.set(droneSize, droneSize, droneSize)
     scene.add(model)
 
     // 1. Verificar si el modelo tiene animaciones

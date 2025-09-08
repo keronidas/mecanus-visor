@@ -24,14 +24,15 @@ export default defineConfig({
         // silent: true,
         targets: [
           {
-            src: '/home/seom2/Desktop/sensor_lx/src/renderer/assets/models/*.glb',
-            dest: 'assets/models'
+            "src": "src/renderer/assets/models/*.glb",
+            "dest": "assets/models"
           },
           {
-            src: '/home/seom2/Desktop/sensor_lx/src/renderer/assets/environmentMap/*.hdr',
-            dest: 'assets/environmentMap'
+            "src": "src/renderer/assets/environmentMap/*.hdr",
+            "dest": "assets/environmentMap"
           }
         ]
+
       })
     ]
   }
